@@ -1,0 +1,19 @@
+commit 920591daafeedf8197b6fae69d3cf9e0de29dd71
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Mon Jul 26 15:18:00 2010 -0400
+
+    Fix rhbz#616244 - Clicking on the leave button doesn't work on nodes page
+
+diff --git a/luci/templates/node.html b/luci/templates/node.html
+index 66e38bd..b1b748f 100644
+--- a/luci/templates/node.html
++++ b/luci/templates/node.html
+@@ -173,7 +173,7 @@
+       <div id="details_header_buttons">
+         <a href="${tg.url('nodes_cmd?command=Reboot' + '&amp;name=' + name)}" id="dh_reboot" title="reboot"><span class="hide">reboot</span></a>
+         <a href="${tg.url('nodes_cmd?command=Join+Cluster'  + '&amp;name=' + name)}" id="dh_join" title="join"><span class="hide">join</span></a>
+-        <a href="${tg.url('nodes_cmd?command=Leave' + '&amp;name=' + name)}" id="dh_leave" title="leave cluster"><span class="hide">leave cluster</span></a>
++        <a href="${tg.url('nodes_cmd?command=Leave+Cluster' + '&amp;name=' + name)}" id="dh_leave" title="leave cluster"><span class="hide">leave cluster</span></a>
+         <a href="${tg.url('nodes_cmd?command=Delete' + '&amp;name=' + name)}" id="dh_delete" title="delete"><span class="hide">delete</span></a>
+       </div>
+       <span class="details_header_info_label">Status</span>

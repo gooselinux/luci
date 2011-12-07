@@ -1,0 +1,21 @@
+commit 3177c4dd861060b6bec1b3510fcf041334c1fff7
+Author: Jan Pokorny <jpokorny@redhat.com>
+Date:   Mon Jul 19 20:20:53 2010 +0200
+
+    Fence_scsi now uses nodename (instead of node), fix for bz#615929
+
+diff --git a/luci/templates/fence_devices.html b/luci/templates/fence_devices.html
+index ac981e2..65d0a56 100644
+--- a/luci/templates/fence_devices.html
++++ b/luci/templates/fence_devices.html
+@@ -823,8 +823,8 @@
+ 		<tr>
+ 			<td>Node name</td>
+ 			<td>
+-				<input type="text" class="text" name="node"
+-					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('node')} or {}"/>
++				<input type="text" class="text" name="nodename"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('nodename')} or {}"/>
+ 			</td>
+ 		</tr>
+ 		<!--

@@ -1,0 +1,19 @@
+commit 6afbe5ac3ed48b589ba4375065a4d8aa35eb3927
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Thu Jul 22 17:03:03 2010 -0500
+
+    Fix fence_scsi fence device so it can be added properly (bz#615929)
+
+diff --git a/luci/widget_validators/validate_fence.py b/luci/widget_validators/validate_fence.py
+index 03a67cb..3d2c39e 100644
+--- a/luci/widget_validators/validate_fence.py
++++ b/luci/widget_validators/validate_fence.py
+@@ -234,7 +234,7 @@ def val_vmware_fd(fencedev, fence_name, **kw):
+ 
+ def val_scsi_fd(fencedev, fence_name, **kw):
+ 	params = (
+-		('node', True),
++		('nodename', True),
+ 		('devices', False),
+ 		('key', False),
+ 		('aptpl', False),

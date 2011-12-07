@@ -1,0 +1,52 @@
+commit 64e279a93530e1ee5342113b337e59cec376243c
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Mon Aug 2 15:02:54 2010 -0500
+
+    Finished up luci speedup patches
+
+diff --git a/luci/lib/db_helpers.py b/luci/lib/db_helpers.py
+index 6cc8bc2..bfd98ff 100644
+--- a/luci/lib/db_helpers.py
++++ b/luci/lib/db_helpers.py
+@@ -156,6 +156,28 @@ def get_cluster_list():
+ 
+     return db_obj
+ 
++def get_cluster_list_status(delegate=None):
++    cluster_list = {}
++
++    db_objs = get_cluster_list()
++    for i in db_objs:
++        cluster_name = i.name
++        # Delegate, if it exists, will be an instance of
++        #   luci.controllers.cluster.IndividualClusterController
++        if delegate and delegate.name == cluster_name:
++            status = delegate.get_status()
++        else:
++            rc = get_agent_for_cluster(cluster_name)
++            if rc is None:
++                status = ClusterStatus(None)
++            else:
++                status = get_status_for_cluster(cluster_name, rc)
++
++        cluster_list[cluster_name] = {
++            'status': status
++            }
++    return cluster_list
++
+ def get_cluster_list_full():
+     cluster_list = {}
+ 
+diff --git a/luci/templates/mainmenu.html b/luci/templates/mainmenu.html
+index 40ceba4..71fbfe3 100644
+--- a/luci/templates/mainmenu.html
++++ b/luci/templates/mainmenu.html
+@@ -10,7 +10,7 @@
+ 	    <li><a py:attrs="{'class': 'manage_clusters' in dir(tmpl_context) and 'current' or '', 'href': tg.url('/clusters')}">Manage Clusters</a></li>
+ 	  </ul>	
+ 	  <ul class="sidenavlist" id="clusterlist">
+-            <div py:for="i, (entity_name, cluster_data) in enumerate(db_helpers.get_cluster_list_full().iteritems())"
++            <div py:for="i, (entity_name, cluster_data) in enumerate(db_helpers.get_cluster_list_status(tmpl_context.cluster).iteritems())"
+               py:attrs="not i%2 and {'class': 'even'} or None"
+               py:with="identifier = form_utils.string2Id(entity_name)">
+ 	      <div py:if="hasattr(cluster_data['status'],'quorate')">

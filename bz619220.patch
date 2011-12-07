@@ -1,0 +1,376 @@
+commit 495bf846538bab4741e2ca7b40f59f0260767275
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Wed Jul 28 17:29:49 2010 -0500
+
+    Added code to prevent luci from requesting the same information multiple times
+    
+    - From Andrew Beekhoff
+    - From testing with a two node cluster it looks like it speeds pages
+      up about .5s (or about 25%)
+
+diff --git a/luci/controllers/cluster.py b/luci/controllers/cluster.py
+index 0dd98ef..73ad49d 100644
+--- a/luci/controllers/cluster.py
++++ b/luci/controllers/cluster.py
+@@ -71,28 +71,23 @@ class ClusterController(BaseController):
+ 
+ class IndividualClusterController(BaseController):
+     def __init__(self, name, iccdata, nodename=None):
++        self.agent  = None
++        self.model  = None
++        self.status = None
++        self.version = None
++
+         self.name = name
+         self.data = iccdata
+         self.nodename = nodename
++
+         identity = request.environ.get('repoze.who.identity')
+         self.username = identity['repoze.who.userid']
++
++        log.debug("Creating %s" % repr(self))
+         tmpl_context.show_sidebar = True
+         tmpl_context.cluster_name = self.name
+         tmpl_context.cluster_url = '/cluster/%s/' % self.name
+-
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-
+-        self.model = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = self.model
+-
+-        if self.model:
+-            tmpl_context.cluster_version = self.model.getClusterVersion()
+-        else:
+-            tmpl_context.cluster_version = app_globals.DEFAULT_CLUSTER_VERSION
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
++        tmpl_context.cluster = self
+ 
+     @expose("luci.templates.node")
+     def default(self):
+@@ -100,6 +95,34 @@ class IndividualClusterController(BaseController):
+ 
+         return dict(page='nodes', name=self.nodename, base_url='/nodes', nodes=db.nodes)
+ 
++    def get_agent(self):
++        if not self.agent:
++            try:
++                self.agent = get_agent_for_cluster(self.name)
++            except:
++                self.agent = None
++        return self.agent
++
++    def get_model(self):
++        if not self.model:
++            log.debug("Obtaining cluster model for %s" % repr(self))
++            self.model = get_model_for_cluster(self.name, self.get_agent())
++        return self.model
++
++    def get_status(self):
++        if not self.status:
++            self.status = get_status_for_cluster(self.name, self.get_agent())
++        return self.status
++
++    def get_version(self):
++        if not self.version:
++            self.version = app_globals.DEFAULT_CLUSTER_VERSION
++            m = self.get_model()
++            if m:
++                self.version = m.getClusterVersion()
++
++        return self.version
++
+     @expose("luci.templates.node")
+     def nodes(self):
+         db = get_cluster_db_obj(self.name)
+@@ -107,12 +130,14 @@ class IndividualClusterController(BaseController):
+ 
+     @expose("luci.templates.node")
+     def add_nodes_cmd(self, command=None, **kw):
++        self.get_model()
+         db = get_cluster_db_obj(self.name)
+         vret = validate_node_add_form(self.model, db, **kw)
+         redirect('%s%s' % (tmpl_context.cluster_url, 'nodes'))
+ 
+     @expose("luci.templates.node")
+     def nodes_fence_cmd(self, command=None, **kw):
++        self.get_model()
+         if not self.model:
+             flash(_('Unable to contact any nodes in this cluster'),
+                 status="error")
+@@ -221,6 +246,7 @@ class IndividualClusterController(BaseController):
+     # This processes all of the commands that we can apply to a node
+     @expose("luci.templates.node")
+     def nodes_cmd(self, command=None, **kw):
++        self.get_model()
+         if not self.model:
+             flash(_('Unable to contact any nodes in this cluster'),
+                 status="error")
+@@ -284,6 +310,7 @@ class IndividualClusterController(BaseController):
+ 
+     @expose("luci.templates.resource")
+     def resources_cmd(self, command=None, **kw):
++        self.get_model()
+         tmpl_context.cluster_url = '/cluster/%s/resources' % self.name
+         
+         if not self.model:
+@@ -370,6 +397,7 @@ class IndividualClusterController(BaseController):
+ 
+     @expose("luci.templates.service")
+     def services_cmd(self, command=None, **kw):
++        self.get_model()
+         tmpl_context.cluster_url = '/cluster/%s/services' % self.name
+ 
+         if not self.model:
+@@ -467,6 +495,7 @@ class IndividualClusterController(BaseController):
+ 
+     @expose("luci.templates.failover")
+     def failovers_cmd(self, command=None, **kw):
++        self.get_model()
+         tmpl_context.cluster_url = '/cluster/%s/failovers' % self.name
+ 
+         if not self.model:
+@@ -567,6 +596,7 @@ class IndividualClusterController(BaseController):
+ 
+     @expose("luci.templates.fence")
+     def fences_cmd(self, command=None, **kw):
++        self.get_model()
+         tmpl_context.cluster_url = '/cluster/%s/fences' % self.name
+ 
+         if not self.model:
+@@ -639,6 +669,7 @@ class IndividualClusterController(BaseController):
+ 
+     @expose("luci.templates.configure")
+     def configure_cmd(self, command=None, *args, **kw):
++        self.get_model()
+         tmpl_context.cluster_url = '/cluster/%s/configure' % self.name
+ 
+         if not self.model:
+diff --git a/luci/templates/configure.html b/luci/templates/configure.html
+index 65c8a49..1a14a5e 100644
+--- a/luci/templates/configure.html
++++ b/luci/templates/configure.html
+@@ -11,7 +11,7 @@
+   <title>${title()}</title>
+ </head>
+ 
+-<body py:with="cluster_data = tmpl_context.cluster_data;
++<body py:with="cluster_data = tmpl_context.cluster.get_model();
+                form_utils = app_globals.form_utils;
+                totem_defaults = app_globals.totem;">
+   <div class="sectionblock">
+@@ -79,7 +79,7 @@
+ 	      <div class="row"><label>Post Join Delay</label>
+ 	        <input type="text" class="text" name="post_join_delay" value="${cluster_data and cluster_data.getFenceDaemonPtr().getAttribute('post_join_delay')}"/>
+           </div>
+-          <div class="row" py:if="tmpl_context.cluster_version == 2">
++          <div class="row" py:if="tmpl_context.cluster.get_version() == 2">
+ 	        <input type="checkbox" class="checkbox" name="fence_xvmd"
+ 	            py:attrs="cluster_data and cluster_data.hasFenceXVM() and { 'checked': 'checked' } or {}"/>
+ 	            <label class="choice">Run XVM fence daemon</label>
+diff --git a/luci/templates/failover.html b/luci/templates/failover.html
+index e21c51c..5909709 100644
+--- a/luci/templates/failover.html
++++ b/luci/templates/failover.html
+@@ -13,8 +13,8 @@
+ </head>
+ 
+ <body onload="onLoad()"
+-      py:with="cluster_data = tmpl_context.cluster_data;
+-               cluster_status = tmpl_context.cluster_status">
++      py:with="cluster_data = tmpl_context.cluster.get_model();
++               cluster_status = tmpl_context.cluster.get_status()">
+ 
+   <script type="text/javascript" src="${tg.url('/js/failover_form.js')}"></script>
+   <form action="${tg.url(failovers_cmd)}" method="post">
+diff --git a/luci/templates/fence.html b/luci/templates/fence.html
+index fae99cf..5126b7c 100644
+--- a/luci/templates/fence.html
++++ b/luci/templates/fence.html
+@@ -11,8 +11,8 @@
+   <title>${title()}</title>
+ </head>
+ 
+-<body py:with="cluster_data = tmpl_context.cluster_data;
+-               cluster_status = tmpl_context.cluster_status">
++<body py:with="cluster_data = tmpl_context.cluster.get_model();
++               cluster_status = tmpl_context.cluster.get_status()">
+ 
+   <script type="text/javascript" src="/js/fence.js"></script>
+ 
+diff --git a/luci/templates/fence_devices.html b/luci/templates/fence_devices.html
+index 98ab861..bfb9934 100644
+--- a/luci/templates/fence_devices.html
++++ b/luci/templates/fence_devices.html
+@@ -2672,35 +2672,35 @@ ${fence_unknown(None,0)}
+ 			<option>-- Select a fence device --</option>
+ 			<option name="fence_apc" value="fence_apc">APC Power Switch</option>
+ 			<option name="fence_apc_snmp" value="fence_apc_snmp">APC Power Switch (SNMP interface)</option>
+-			<option py:if="tmpl_context.cluster_version == 2" name="fence_brocade" value="fence_brocade">Brocade Fabric Switch</option>
+-			<option py:if="tmpl_context.cluster_version == 2" name="fence_bullpap" value="fence_bullpap">Bull PAP</option>
++			<option py:if="tmpl_context.cluster.get_version() == 2" name="fence_brocade" value="fence_brocade">Brocade Fabric Switch</option>
++			<option py:if="tmpl_context.cluster.get_version() == 2" name="fence_bullpap" value="fence_bullpap">Bull PAP</option>
+ 			<option name="fence_cisco_mds" value="fence_cisco_mds">Cisco MDS</option>
+ 
+-			<option py:if="tmpl_context.cluster_version == 2" name="fence_drac" value="fence_drac">Dell DRAC</option>
+-			<option py:if="tmpl_context.cluster_version == 3" name="fence_drac" value="fence_drac">Dell DRAC (Deprecated)</option>
++			<option py:if="tmpl_context.cluster.get_version() == 2" name="fence_drac" value="fence_drac">Dell DRAC</option>
++			<option py:if="tmpl_context.cluster.get_version() == 3" name="fence_drac" value="fence_drac">Dell DRAC (Deprecated)</option>
+ 
+ 			<option name="fence_drac5" value="fence_drac5">Dell DRAC 5</option> <!-- needs work -->
+ 			<option name="fence_egenera" value="fence_egenera">Egenera SAN Controller</option>
+ 
+ 			<option name="fence_eps" value="fence_eps">ePowerSwitch</option>
+-			<py:choose test="tmpl_context.cluster_version">
++			<py:choose test="tmpl_context.cluster.get_version()">
+ 				<py:when test="3">
+ 					<option name="fence_virt" value="fence_virt">Fence virt (Tech Preview)</option>
+ 					<option name="fence_xvm" value="fence_xvm">Fence virt (Multicast Mode)</option>
+ 				</py:when>
+ 			</py:choose>
+-			<option py:if="tmpl_context.cluster_version == 2" name="fence_xvm" value="fence_xvm">Fence xvm</option>
++			<option py:if="tmpl_context.cluster.get_version() == 2" name="fence_xvm" value="fence_xvm">Fence xvm</option>
+ 
+ 			<option name="fence_rsb" value="fence_rsb">Fujitsu Siemens RemoteView Service Board</option>
+ 			<option name="fence_ilo" value="fence_ilo">HP iLO Device</option>
+ 			<option name="fence_ilo_mp" value="fence_ilo_mp">HP iLO MP</option> <!-- needs work -->
+ 			<option name="fence_bladecenter" value="fence_bladecenter">IBM BladeCenter</option>
+-			<option py:if="tmpl_context.cluster_version == 3" name="fence_ibmblade" value="fence_ibmblade">IBM BladeCenter SNMP</option>
++			<option py:if="tmpl_context.cluster.get_version() == 3" name="fence_ibmblade" value="fence_ibmblade">IBM BladeCenter SNMP</option>
+ 
+-			<option py:if="tmpl_context.cluster_version == 2" name="fence_rsa" value="fence_rsa">IBM RSA II Device</option>	<!-- needs work -->
+-			<option py:if="tmpl_context.cluster_version == 3" name="fence_rsa" value="fence_rsa">IBM RSA II Device (Deprecated)</option>	<!-- needs work -->
++			<option py:if="tmpl_context.cluster.get_version() == 2" name="fence_rsa" value="fence_rsa">IBM RSA II Device</option>	<!-- needs work -->
++			<option py:if="tmpl_context.cluster.get_version() == 3" name="fence_rsa" value="fence_rsa">IBM RSA II Device (Deprecated)</option>	<!-- needs work -->
+ 
+-			<py:if test="tmpl_context.cluster_version == 3">
++			<py:if test="tmpl_context.cluster.get_version() == 3">
+ 			<!--				<option name="fence_cpint" value="fence_cpint">IBM S/390 cpint</option> -->
+ 			<!--				<option name="fence_zvm" value="fence_zvm">IBM S/390 z/VM</option> -->
+ 				<option name="fence_ifmib" value="fence_ifmib">IF MIB</option>
+@@ -2708,27 +2708,27 @@ ${fence_unknown(None,0)}
+ 			</py:if>
+ 
+ 			<option name="fence_ipmilan" value="fence_ipmilan">IPMI Lan</option>
+-			<option py:if="tmpl_context.cluster_version == 2" name="fence_brocade" value="fence_brocade">Brocade Fabric Switch</option>
+-			<option py:if="tmpl_context.cluster_version == 2" name="fence_lpar" value="fence_lpar">LPAR Fencing</option>
+-			<option py:if="tmpl_context.cluster_version == 2" name="fence_mcdata" value="fence_mcdata">McData SAN Switch</option>
++			<option py:if="tmpl_context.cluster.get_version() == 2" name="fence_brocade" value="fence_brocade">Brocade Fabric Switch</option>
++			<option py:if="tmpl_context.cluster.get_version() == 2" name="fence_lpar" value="fence_lpar">LPAR Fencing</option>
++			<option py:if="tmpl_context.cluster.get_version() == 2" name="fence_mcdata" value="fence_mcdata">McData SAN Switch</option>
+ 
+-			<option py:if="tmpl_context.cluster_version == 2" name="fence_sanbox2" value="fence_sanbox2">QLogic SANbox2</option>
+-			<option py:if="tmpl_context.cluster_version == 3" name="fence_sanbox2" value="fence_sanbox2">QLogic SANbox2 (Deprecated)</option>
++			<option py:if="tmpl_context.cluster.get_version() == 2" name="fence_sanbox2" value="fence_sanbox2">QLogic SANbox2</option>
++			<option py:if="tmpl_context.cluster.get_version() == 3" name="fence_sanbox2" value="fence_sanbox2">QLogic SANbox2 (Deprecated)</option>
+ 
+-			<!--			<option py:if="tmpl_context.cluster_version == 3" name="fence_rackswitch" value="fence_rackswitch">RackSaver RackSwitch</option> -->
+-			<option py:if="tmpl_context.cluster_version == 2" name="fence_rps10" value="fence_rps10">RPS10 Serial Switch</option> -->
++			<!--			<option py:if="tmpl_context.cluster.get_version() == 3" name="fence_rackswitch" value="fence_rackswitch">RackSaver RackSwitch</option> -->
++			<option py:if="tmpl_context.cluster.get_version() == 2" name="fence_rps10" value="fence_rps10">RPS10 Serial Switch</option> -->
+ 			<option name="fence_scsi" value="fence_scsi">SCSI Reservation Fencing</option>
+ 
+-			<py:if test="tmpl_context.cluster_version == 3">
++			<py:if test="tmpl_context.cluster.get_version() == 3">
+ 			<!--				<option name="fence_alom" value="fence_alom">Sun ALOM</option> -->
+ 			<!--				<option name="fence_ldom" value="fence_ldom">Sun LDOM</option> -->
+ 			</py:if>
+ 
+-			<option py:if="tmpl_context.cluster_version == 2" name="fence_vixel" value="fence_vixel">Vixel SAN Switch</option>
+-			<option py:if="tmpl_context.cluster_version == 2" name="fence_vmware" value="fence_vmware">VMware Fencing (Tech Preview)</option>
++			<option py:if="tmpl_context.cluster.get_version() == 2" name="fence_vixel" value="fence_vixel">Vixel SAN Switch</option>
++			<option py:if="tmpl_context.cluster.get_version() == 2" name="fence_vmware" value="fence_vmware">VMware Fencing (Tech Preview)</option>
+ 			<option name="fence_wti" value="fence_wti">WTI Power Switch</option>
+ 
+-			<py:if test="tmpl_context.cluster_version == 3">
++			<py:if test="tmpl_context.cluster.get_version() == 3">
+ 			<!--				<option name="fence_xcat" value="fence_xcat">xCAT</option> -->
+ 			<!--				<option name="fence_zvm" value="fence_zvm">s390 z/VM</option> -->
+ 			</py:if>
+diff --git a/luci/templates/node.html b/luci/templates/node.html
+index 2b0b8b1..546774d 100644
+--- a/luci/templates/node.html
++++ b/luci/templates/node.html
+@@ -16,8 +16,8 @@
+     from luci.lib.ricci_helpers import node_get_daemon_states
+ ?>
+ 
+-<body py:with="cluster_data = tmpl_context.cluster_data;
+-               cluster_status = tmpl_context.cluster_status">
++<body py:with="cluster_data = tmpl_context.cluster.get_model();
++               cluster_status = tmpl_context.cluster.get_status()">
+ 
+   <script type="text/javascript" src="/js/add_nodes.js"></script>
+   <script type="text/javascript" src="/js/node.js"></script>
+diff --git a/luci/templates/resource.html b/luci/templates/resource.html
+index 14df59d..4999f82 100644
+--- a/luci/templates/resource.html
++++ b/luci/templates/resource.html
+@@ -11,8 +11,8 @@
+   <title>${title()}</title>
+ </head>
+ 
+-<body py:with="cluster_data = tmpl_context.cluster_data;
+-               cluster_status = tmpl_context.cluster_status">
++<body py:with="cluster_data = tmpl_context.cluster.get_model();
++               cluster_status = tmpl_context.cluster.get_status()">
+   <script type="text/javascript" src="/js/resource.js"></script>
+   <xi:include href="resource_list.html" />
+ 
+diff --git a/luci/templates/resource_list.html b/luci/templates/resource_list.html
+index ebb06f0..bfed5f4 100644
+--- a/luci/templates/resource_list.html
++++ b/luci/templates/resource_list.html
+@@ -172,7 +172,7 @@
+ 			<td>
+ 				<select name="fstype" class="serviceformselect"
+ 					py:attrs="{'disabled':global_resource and 'disabled' or None}">
+-				  <py:choose test="tmpl_context.cluster_version">
++				  <py:choose test="tmpl_context.cluster.get_version()">
+ 				  <py:when test="3">
+ 					<option value="gfs2"
+ 						py:attrs="res and res.getAttribute('fstype') == 'gfs2' and {'selected':'selected'} or {}">GFS2</option>
+@@ -1411,7 +1411,7 @@ ${vm_resource(None,None,None,0)}
+ 		<option>-- Select a resource type --</option>
+ 		<option name="apache_resource" value="apache_resource">Apache</option>
+ 		<option name="fs_resource" value="fs_resource">Filesystem</option>
+-		<py:choose test="tmpl_context.cluster_version">
++		<py:choose test="tmpl_context.cluster.get_version()">
+ 			<py:when test="3">
+ 				<option name="clusterfs_resource" value="clusterfs_resource">GFS2</option>
+ 			</py:when>
+@@ -1425,7 +1425,7 @@ ${vm_resource(None,None,None,0)}
+ 		<option name="netfs_resource" value="netfs_resource">NFS/CIFS Mount</option>
+ 		<option name="nfsclient_resource" value="nfsclient_resource">NFS Client</option>
+ 		<option name="nfsexport_resource" value="nfsexport_resource">NFS v3 Export</option>
+-		<option py:if="tmpl_context.cluster_version not in (1, 2)" name="nfsserver_resource" value="nfsserver_resource">NFS Server</option>
++		<option py:if="tmpl_context.cluster.get_version() not in (1, 2)" name="nfsserver_resource" value="nfsserver_resource">NFS Server</option>
+ 		<option name="oracledb_resource" value="oracledb_resource">Oracle 10g/11g Failover Instance</option>
+ 		<option name="openldap_resource" value="openldap_resource">Open LDAP</option>
+ 		<option name="postgres8_resource" value="postgres8_resource">PostgreSQL 8</option>
+diff --git a/luci/templates/service.html b/luci/templates/service.html
+index 6970baf..782f686 100644
+--- a/luci/templates/service.html
++++ b/luci/templates/service.html
+@@ -11,8 +11,8 @@
+   <title>${title()}</title>
+ </head>
+ 
+-<body py:with="cluster_data = tmpl_context.cluster_data;
+-               cluster_status = tmpl_context.cluster_status;
++<body py:with="cluster_data = tmpl_context.cluster.get_model();
++               cluster_status = tmpl_context.cluster.get_status();
+                form_utils = app_globals.form_utils">
+ 
+   <script type="text/javascript" src="/js/service.js"></script>
+@@ -154,7 +154,7 @@
+     </div>
+ 
+     <div id="edit_service_dialog"
+-        py:with="svc = cluster_data.getService(name)">
++        py:with="svc = tmpl_context.cluster.get_model().getService(name)">
+       <form 
+         style="padding-left: 24px; "
+         name="edit_service_dialog" method="post" action="${tg.url(services_cmd + '?command=Edit')}">

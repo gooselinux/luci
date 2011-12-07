@@ -1,0 +1,58 @@
+commit b9a89c78cea293840af14e873c6ba741fb7782c4
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Mon Jul 26 14:42:32 2010 -0400
+
+    Fix rhbz#615468 - When creating a new failover domain, adding nodes has no effect
+
+diff --git a/luci/widget_validators/validate_cluster_prop.py b/luci/widget_validators/validate_cluster_prop.py
+index 532ab99..b35ccaa 100644
+--- a/luci/widget_validators/validate_cluster_prop.py
++++ b/luci/widget_validators/validate_cluster_prop.py
+@@ -53,8 +53,6 @@ def validate_fdom_prop_form(model, **kw):
+     else:
+         fdom.addAttribute('nofailback', '0')
+ 
+-    if not restricted and not prioritized:
+-        fdom.clear_member_nodes()
+     return (len(errors) < 1, {'errors': errors})
+ 
+ def validate_fdom_create_form(model, **kw):
+@@ -90,22 +88,22 @@ def validate_fdom_create_form(model, **kw):
+     else:
+         fdom.addAttribute('nofailback', '0')
+ 
+-    if restricted:
+-        for i in model.getNodeNames():
+-            if kw.get('%s.check' % i):
+-                fdn = FailoverDomainNode()
+-                if prioritized:
+-                    priority = kw.get('%s.priority' % i)
+-                    if priority:
+-                        try:
+-                            priority = int(priority)
+-                            if priority < 1:
+-                                raise ValueError
+-                            fdn.addAttribute('priority', str(priority))
+-                        except ValueError:
+-                            errors.append(_('Invalid priority for failover domain member %s: %s') % (i, priority))
+-                fdn.addAttribute('name', i)
+-                fdom.addChild(fdn)
++    for i in model.getNodeNames():
++        if kw.get('%s.check' % i):
++            fdn = FailoverDomainNode()
++            if prioritized:
++                priority = kw.get('%s.priority' % i)
++                if priority:
++                    try:
++                        priority = int(priority)
++                        if priority < 1:
++                            raise ValueError
++                        fdn.addAttribute('priority', str(priority))
++                    except ValueError:
++                        errors.append(_('Invalid priority for failover domain member %s: %s') % (i, priority))
++            fdn.addAttribute('name', i)
++            fdom.addChild(fdn)
++
+     model.addFailoverDomain(fdom)
+     return (len(errors) < 1, {'errors': errors})
+ 

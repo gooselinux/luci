@@ -1,0 +1,118 @@
+commit e1f0a35809bc1d5c5d85b0f9541a1215c6b80e49
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Thu Jun 10 01:01:14 2010 -0400
+
+    Fix rhbz #600058: ssh_identity field values are dropped
+
+diff --git a/luci/widget_validators/validate_fence.py b/luci/widget_validators/validate_fence.py
+index bedce1d..7f71845 100644
+--- a/luci/widget_validators/validate_fence.py
++++ b/luci/widget_validators/validate_fence.py
+@@ -319,7 +319,7 @@ def val_drac5_fd(fencedev, fence_name, **kw):
+ 		('module_name', True),
+ 		('cmd_prompt', False),
+ 		('secure', False),
+-		('identity', False),
++		('identity_file', False),
+ 		('passwd', False),
+ 		('passwd_script', False),
+ 		('power_wait', False),
+@@ -369,7 +369,7 @@ def val_alom_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
+ 		('login', True),
+-		('identity', False),
++		('identity_file', False),
+ 		('passwd', False),
+ 		('passwd_script', False),
+ 		('power_wait', False),
+@@ -382,7 +382,7 @@ def val_ldom_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
+ 		('login', True),
+-		('identity', False),
++		('identity_file', False),
+ 		('passwd', False),
+ 		('passwd_script', False),
+ 		('cmd_prompt', False),
+@@ -395,7 +395,7 @@ def val_ldom_fd(fencedev, fence_name, **kw):
+ def val_rackswitch_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
+-		('identity', False),
++		('identity_file', False),
+ 		('passwd', False),
+ 		('passwd_script', False),
+ 	)
+@@ -533,7 +533,7 @@ def val_ilo_mp_fd(fencedev, fence_name, **kw):
+ 		('passwd', False),
+ 		('passwd_script', False),
+ 		('secure', False),
+-		('identity', False),
++		('identity_file', False),
+ 		('cmd_prompt', False),
+ 		('power_wait', False),
+ 	)
+@@ -649,7 +649,7 @@ def val_apc_fi(fenceinst, parent_name, **kw):
+ 		('port', True),
+ 		('switch', False),
+ 		('secure', False),
+-		('identity', False),
++		('identity_file', False),
+ 	)
+ 
+ 	errors = config_fence_attr(params, fenceinst, parent_name, **kw)
+@@ -659,7 +659,7 @@ def val_wti_fi(fenceinst, parent_name, **kw):
+ 	params = (
+ 		('port', True),
+ 		('secure', False),
+-		('identity', False),
++		('identity_file', False),
+ 	)
+ 
+ 	errors = config_fence_attr(params, fenceinst, parent_name, **kw)
+@@ -669,7 +669,7 @@ def val_virsh_fi(fenceinst, parent_name, **kw):
+ 	params = (
+ 		('port', True),
+ 		('secure', False),
+-		('identity', False),
++		('identity_file', False),
+ 	)
+ 
+ 	errors = config_fence_attr(params, fenceinst, parent_name, **kw)
+@@ -712,7 +712,7 @@ def val_bladecenter_fi(fenceinst, parent_name, **kw):
+ 		('port', True),
+ 		('switch', False),
+ 		('secure', False),
+-		('identity', False),
++		('identity_file', False),
+ 	)
+ 
+ 	errors = config_fence_attr(params, fenceinst, parent_name, **kw)
+@@ -741,7 +741,7 @@ def val_lpar_fi(fenceinst, parent_name, **kw):
+ 		('partition', True),
+ 		('managed', True),
+ 		('secure', True),
+-		('identity', False),
++		('identity_file', False),
+ 	)
+ 	
+ 	errors = config_fence_attr(params, fenceinst, parent_name, **kw)
+@@ -776,7 +776,7 @@ def val_vmware_fi(fenceinst, parent_name, **kw):
+ 	params = (
+ 		('port', True),
+ 		('secure', False),
+-		('identity', False),
++		('identity_file', False),
+ 	)
+ 
+ 	errors = config_fence_attr(params, fenceinst, parent_name, **kw)
+@@ -794,7 +794,7 @@ def val_ldom_fi(fenceinst, parent_name, **kw):
+ 	params = (
+ 		('port', True),
+ 		('secure', False),
+-		('identity', False),
++		('identity_file', False),
+ 	)
+ 
+ 	errors = config_fence_attr(params, fenceinst, parent_name, **kw)

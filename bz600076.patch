@@ -1,0 +1,19 @@
+commit ffffce8f130f78a649857ea1299d3adbad27661c
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Fri Jun 4 14:28:41 2010 -0500
+
+    Set a default (Use locally installed packages) when creating a cluster.
+
+diff --git a/luci/templates/create_cluster.html b/luci/templates/create_cluster.html
+index 4902db6..0ed4bbb 100644
+--- a/luci/templates/create_cluster.html
++++ b/luci/templates/create_cluster.html
+@@ -34,7 +34,7 @@
+         <input type="radio" class="radio" name="download_pkgs" value="download" />
+         <label class="choice">Download Packages</label>
+         <br />     
+-        <input type="radio" class="radio" name="download_pkgs" value="local" />
++        <input type="radio" class="radio" name="download_pkgs" value="local" checked="yes"/>
+         <label class="choice">Use locally installed packages</label>
+     </div>
+     <div class="row">        

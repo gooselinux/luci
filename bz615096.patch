@@ -1,0 +1,19 @@
+commit 3614120e4b3d0b326404ce141a84a1223312e6f4
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Fri Jul 16 14:56:29 2010 -0500
+
+    Fixed issue with removing Prioritized & Restricted tags causing a traceback.
+
+diff --git a/luci/widget_validators/validate_cluster_prop.py b/luci/widget_validators/validate_cluster_prop.py
+index 61b0ba4..532ab99 100644
+--- a/luci/widget_validators/validate_cluster_prop.py
++++ b/luci/widget_validators/validate_cluster_prop.py
+@@ -54,7 +54,7 @@ def validate_fdom_prop_form(model, **kw):
+         fdom.addAttribute('nofailback', '0')
+ 
+     if not restricted and not prioritized:
+-        fdom.clear_member_nodeis()
++        fdom.clear_member_nodes()
+     return (len(errors) < 1, {'errors': errors})
+ 
+ def validate_fdom_create_form(model, **kw):

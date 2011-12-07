@@ -1,0 +1,230 @@
+commit 5eb097d95f080c0301fa1354827a14c74780dbe5
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Thu Jul 15 16:41:48 2010 -0500
+
+    Updated missing fence instances and improved look of fence node page
+    
+    The following fence instances were added:
+    fence_rps10
+    fence_drac
+    fence_drac5
+    fence_ilo
+    fence_ilo_mp
+    fence_rsa
+    fence_ipmilan
+    fence_alom
+    fence_cpint
+    fence_rsb
+    fence_xcat
+    fence_zvm
+    fence_scsi
+
+diff --git a/luci/public/css/fence.css b/luci/public/css/fence.css
+index e609e30..a89cf98 100644
+--- a/luci/public/css/fence.css
++++ b/luci/public/css/fence.css
+@@ -81,5 +81,5 @@ th.fence_tnodes_level {
+ }
+ 
+ #fence_form_area {
+-  min-height: 6em;
++/*  min-height: 6em; */
+ }
+diff --git a/luci/public/css/node.css b/luci/public/css/node.css
+index d953580..9062ede 100644
+--- a/luci/public/css/node.css
++++ b/luci/public/css/node.css
+@@ -131,7 +131,7 @@ th.node_tdaemons_status {
+   min-width: 20%;
+ }
+ 
+-div.fencedev, div.fenceinst {
++div.fencedev {
+     border: 2px groove gray;
+ }
+ 
+diff --git a/luci/templates/fence_devices.html b/luci/templates/fence_devices.html
+index 88814a5..ac981e2 100644
+--- a/luci/templates/fence_devices.html
++++ b/luci/templates/fence_devices.html
+@@ -2652,7 +2652,7 @@ ${fence_unknown(None,0)}
+ 	<div name="fence_select_area">
+ 			<py:if test="model and len(model.getFenceDevices()) != 0">
+ 			<select name="select_div"
+-			  onchange="add_fenceinst('${cont_id}',fencedevicetype[this.options[this.selectedIndex].value],this.options[this.selectedIndex].value);this.selectedIndex=0">
++			  onchange="add_fenceinst('${cont_id}',fencedevicetype[this.options[this.selectedIndex].value],this.options[this.selectedIndex].value);">
+ 			<option>-- Select a fence device --</option>
+ 				<option disabled="disabled">Existing fence devices</option>
+ 				<py:for each="fencedev in model.getFenceDevices()">
+diff --git a/luci/templates/fence_instances.html b/luci/templates/fence_instances.html
+index 556ff67..3f92f6d 100644
+--- a/luci/templates/fence_instances.html
++++ b/luci/templates/fence_instances.html
+@@ -681,6 +681,123 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
++<div py:def="fence_drac_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_drac_instance"
++	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
++
++	<input type="hidden" name="fence_type" value="fence_scsi" />
++	<input type="hidden" name="fence_instance" value="1" />
++	<input type="hidden" name="parent_fencedev"
++		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
++</div>
++
++<div py:def="fence_drac5_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_drac5_instance"
++	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
++
++	<input type="hidden" name="fence_type" value="fence_scsi" />
++	<input type="hidden" name="fence_instance" value="1" />
++	<input type="hidden" name="parent_fencedev"
++		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
++</div>
++
++<div py:def="fence_ilo_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_ilo_instance"
++	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
++
++	<input type="hidden" name="fence_type" value="fence_scsi" />
++	<input type="hidden" name="fence_instance" value="1" />
++	<input type="hidden" name="parent_fencedev"
++		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
++</div>
++
++<div py:def="fence_ilo_mp_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_ilo_mp_instance"
++	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
++
++	<input type="hidden" name="fence_type" value="fence_scsi" />
++	<input type="hidden" name="fence_instance" value="1" />
++	<input type="hidden" name="parent_fencedev"
++		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
++</div>
++
++<div py:def="fence_rsa_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_rsa_instance"
++	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
++
++	<input type="hidden" name="fence_type" value="fence_scsi" />
++	<input type="hidden" name="fence_instance" value="1" />
++	<input type="hidden" name="parent_fencedev"
++		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
++</div>
++
++<div py:def="fence_ipmilan_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_ipmilan_instance"
++	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
++
++	<input type="hidden" name="fence_type" value="fence_scsi" />
++	<input type="hidden" name="fence_instance" value="1" />
++	<input type="hidden" name="parent_fencedev"
++		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
++</div>
++
++<div py:def="fence_alom_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_alom_instance"
++	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
++
++	<input type="hidden" name="fence_type" value="fence_scsi" />
++	<input type="hidden" name="fence_instance" value="1" />
++	<input type="hidden" name="parent_fencedev"
++		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
++</div>
++
++<div py:def="fence_cpint_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_cpint_instance"
++	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
++
++	<input type="hidden" name="fence_type" value="fence_scsi" />
++	<input type="hidden" name="fence_instance" value="1" />
++	<input type="hidden" name="parent_fencedev"
++		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
++</div>
++
++<div py:def="fence_rps10_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_rps10_instance"
++	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
++
++	<input type="hidden" name="fence_type" value="fence_scsi" />
++	<input type="hidden" name="fence_instance" value="1" />
++	<input type="hidden" name="parent_fencedev"
++		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
++</div>
++
++<div py:def="fence_rsb_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_rsb_instance"
++	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
++
++	<input type="hidden" name="fence_type" value="fence_scsi" />
++	<input type="hidden" name="fence_instance" value="1" />
++	<input type="hidden" name="parent_fencedev"
++		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
++</div>
++
++<div py:def="fence_xcat_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_xcat_instance"
++	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
++
++	<input type="hidden" name="fence_type" value="fence_scsi" />
++	<input type="hidden" name="fence_instance" value="1" />
++	<input type="hidden" name="parent_fencedev"
++		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
++</div>
++
++<div py:def="fence_zvm_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_zvm_instance"
++	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
++
++	<input type="hidden" name="fence_type" value="fence_scsi" />
++	<input type="hidden" name="fence_instance" value="1" />
++	<input type="hidden" name="parent_fencedev"
++		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
++</div>
++
++<div py:def="fence_scsi_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_scsi_instance"
++	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
++
++	<input type="hidden" name="fence_type" value="fence_scsi" />
++	<input type="hidden" name="fence_instance" value="1" />
++	<input type="hidden" name="parent_fencedev"
++		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
++</div>
++
+ <div py:def="fence_instance_container"
+ 	id="fence_instance_container" class="hidden">
+ ${fence_apc_instance(None, None, None)}
+@@ -705,5 +822,18 @@ ${fence_eps_instance(None, None, None)}
+ ${fence_ibmblade_instance(None, None, None)}
+ ${fence_ifmib_instance(None, None, None)}
+ ${fence_intelmodular_instance(None, None, None)}
++${fence_drac_instance(None, None, None)}
++${fence_drac5_instance(None, None, None)}
++${fence_ilo_instance(None, None, None)}
++${fence_ilo_mp_instance(None, None, None)}
++${fence_rsa_instance(None, None, None)}
++${fence_ipmilan_instance(None, None, None)}
++${fence_alom_instance(None, None, None)}
++${fence_cpint_instance(None, None, None)}
++${fence_rps10_instance(None, None, None)}
++${fence_rsb_instance(None, None, None)}
++${fence_xcat_instance(None, None, None)}
++${fence_zvm_instance(None, None, None)}
++${fence_scsi_instance(None, None, None)}
+ </div>
+ </html>
+diff --git a/luci/widget_validators/validate_fence.py b/luci/widget_validators/validate_fence.py
+index 11c6e48..03a67cb 100644
+--- a/luci/widget_validators/validate_fence.py
++++ b/luci/widget_validators/validate_fence.py
+@@ -882,7 +882,19 @@ FI_VALIDATE = {
+ 	'fence_drac5':			val_noop_fi,
+ 	'fence_rsa':			val_noop_fi,
+ 	'fence_rsb':			val_noop_fi,
+-	'fence_rps10':			val_noop_fi
++	'fence_rps10':			val_noop_fi,
++	'fence_drac':			val_noop_fi,
++	'fence_drac5':			val_noop_fi,
++	'fence_ilo':			val_noop_fi,
++	'fence_ilo_mp':			val_noop_fi,
++	'fence_rsa':			val_noop_fi,
++	'fence_ipmilan':		val_noop_fi,
++	'fence_alom':			val_noop_fi,
++	'fence_cpint':			val_noop_fi,
++	'fence_rsb':			val_noop_fi,
++	'fence_xcat':			val_noop_fi,
++	'fence_zvm':			val_noop_fi,
++	'fence_scsi':			val_noop_fi
+ }
+ 
+ def validate_fenceinstance(parent_name, fence_agent, **kw):

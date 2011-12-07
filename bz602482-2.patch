@@ -1,0 +1,25 @@
+commit b9421900b8eeb1fd6601f1fb73bc767991d07814
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Thu Jun 10 01:41:58 2010 -0400
+
+    Fix whitespace error in multicast validator
+
+diff --git a/luci/widget_validators/validate_cluster_prop.py b/luci/widget_validators/validate_cluster_prop.py
+index f6c403d..7a09d4a 100644
+--- a/luci/widget_validators/validate_cluster_prop.py
++++ b/luci/widget_validators/validate_cluster_prop.py
+@@ -397,10 +397,10 @@ def validate_cluster_config_form(model, **kw):
+         multicast = kw.get('multicast')
+         mcast_addr = kw.get('mcast_address')
+ 
+-	if multicast == "multicast":
+-	    model.del_cluster_multicast()
+-	elif multicast == "multicast_manual":
+-	    model.set_cluster_multicast(mcast_addr, None)
++        if multicast == "multicast":
++            model.del_cluster_multicast()
++        elif multicast == "multicast_manual":
++            model.set_cluster_multicast(mcast_addr, None)
+ 
+         totem = model.getTotemPtr()
+         if totem is None:

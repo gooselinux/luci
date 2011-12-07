@@ -1,0 +1,65 @@
+commit 627b3d6cc6ab04bc88aa20e5be1f97fc0a871c63
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Mon Jun 14 15:07:55 2010 -0500
+
+    Fixed the "Nodes Joined" in the Homebase/Manage Clusters page
+    
+    - Added the nodesClustered variable to the ClusterStatus class which looks at
+      the 'clustered' status of a node (as opposed to the online status of a node).
+
+diff --git a/luci/lib/cluster_status.py b/luci/lib/cluster_status.py
+index ca403d7..4bb9000 100644
+--- a/luci/lib/cluster_status.py
++++ b/luci/lib/cluster_status.py
+@@ -60,6 +60,7 @@ class ClusterStatus:
+         self.votes = 'Unknown'
+         self.minQuorum = 'Unknown'
+         self.nodesJoined = 0
++        self.nodesClustered = 0
+ 
+         if not status_xml:
+             return
+@@ -79,6 +80,8 @@ class ClusterStatus:
+                     ns = NodeStatus(node)
+                     if ns.online.lower() == 'true':
+                         self.nodesJoined += 1
++                    if ns.clustered.lower() == 'true':
++                        self.nodesClustered += 1
+                     self.nodes[ns.name] = ns
+         except Exception, e:
+             log.exception('Error parsing node list')
+diff --git a/luci/templates/cluster_list.html b/luci/templates/cluster_list.html
+index 4dec657..26399e3 100644
+--- a/luci/templates/cluster_list.html
++++ b/luci/templates/cluster_list.html
+@@ -65,7 +65,7 @@
+         <td class="cluster_tlist_votes">${sum(map(lambda n: int(n.getVotes()), cluster_data['model'].getNodes()))}</td>
+         <td class="cluster_tlist_votes">${cluster_data['status'].votes}</td>
+         <td class="cluster_tlist_quorum">${cluster_data['status'].minQuorum}</td>
+-        <td class="cluster_tlist_votes">${cluster_data['status'].nodesJoined}</td>
++        <td class="cluster_tlist_votes">${cluster_data['status'].nodesClustered}</td>
+ 	    </py:when>
+ 	    <!--! 2) Cluster is not OK. -->
+ 	    <py:when test="'false'">
+@@ -78,7 +78,7 @@
+         <td class="cluster_tlist_votes">${sum(map(lambda n: int(n.getVotes()), cluster_data['model'].getNodes()))}</td>
+         <td class="cluster_tlist_votes">${cluster_data['status'].votes}</td>
+         <td class="cluster_tlist_quorum">${cluster_data['status'].minQuorum}</td>
+-        <td class="cluster_tlist_votes">${cluster_data['status'].nodesJoined}</td>
++        <td class="cluster_tlist_votes">${cluster_data['status'].nodesClustered}</td>
+ 	    </py:when>
+ 	    <!--! 3) Status of the cluster is unknown. -->
+ 	    <py:when test="">
+diff --git a/luci/templates/homebase.html b/luci/templates/homebase.html
+index 0a9b916..3705e2c 100644
+--- a/luci/templates/homebase.html
++++ b/luci/templates/homebase.html
+@@ -68,7 +68,7 @@
+ 		      </py:choose>
+ 		      <py:choose test="cluster_data and cluster_data.get('model') and cluster_data.get('status') and True">
+     		      <py:when test="True">
+-    		        <td class="cluster_tlist_votes">${cluster_data['status'].nodesJoined} of ${len(cluster_data['model'].getNodes())}</td>
++    		        <td class="cluster_tlist_votes">${cluster_data['status'].nodesClustered} of ${len(cluster_data['model'].getNodes())}</td>
+     		      </py:when>
+     		      <py:otherwise>
+     		        <td class="cluster_tlist_votes">-</td>

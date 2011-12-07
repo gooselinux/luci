@@ -1,0 +1,19 @@
+commit 7afef61d9d4f8ee05134ade5b74e4213bd27200b
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Mon Jul 26 21:47:50 2010 -0400
+
+    fix rhbz#615889 - luci cannot start an imported cluster
+
+diff --git a/luci/templates/node.html b/luci/templates/node.html
+index c200430..4ebbadf 100644
+--- a/luci/templates/node.html
++++ b/luci/templates/node.html
+@@ -40,7 +40,7 @@
+     </py:for>
+   </div>
+ 
+-  <form action="${tg.url('nodes_cmd')}" method="post">
++  <form action="${'%snodes_cmd' % tmpl_context.cluster_url}" method="post">
+   <div class="sectionblock">
+   <xi:include href="submenu.html"/>
+   <div id="toolbar">

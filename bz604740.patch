@@ -1,0 +1,149 @@
+commit 2658dc59a9b01b59e98eb91916d432fc3f6abea6
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Fri Jul 9 18:18:27 2010 -0400
+
+    Fix rhbz#604740: [RFE] Support nfsserver resource agent which is for NFSv4 and NFSv3
+
+diff --git a/luci/lib/ClusterConf/ModelBuilder.py b/luci/lib/ClusterConf/ModelBuilder.py
+index 6fe2386..8e75a47 100644
+--- a/luci/lib/ClusterConf/ModelBuilder.py
++++ b/luci/lib/ClusterConf/ModelBuilder.py
+@@ -23,6 +23,7 @@ from Ip import Ip
+ from Script import Script
+ from NFSClient import NFSClient
+ from NFSExport import NFSExport
++from NFSServer import NFSServer
+ from Fs import Fs
+ from Samba import Samba
+ from Apache import Apache
+@@ -97,6 +98,7 @@ TAGNAMES = { 'cluster': Cluster,
+              'script': Script,
+              'nfsexport': NFSExport,
+              'nfsclient': NFSClient,
++             'nfsserver': NFSServer,
+              'SAPDatabase': SAPDatabase,
+              'SAPInstance': SAPInstance,
+              'ASEHAagent': SybaseASE,
+diff --git a/luci/templates/resource_list.html b/luci/templates/resource_list.html
+index ff13a86..e7dad7f 100644
+--- a/luci/templates/resource_list.html
++++ b/luci/templates/resource_list.html
+@@ -301,6 +301,33 @@
+ 	</table>
+ </div>
+ 
++<div py:def="nfsserver_resource(res, form_id, parent_id, isref)" name="NFSSERVER" id="nfsserver_resource" class="row rescfg"
++	py:attrs="res and {'id': 'global_res_%s' % res.getName(), 'name': res.getName()}">
++	<input name="global" type="hidden" value="1" py:if="res and isref != 0"/>
++	<input name="parent_id" type="hidden" value="${parent_id}"/>
++	<input name="form_id" type="hidden" value="${form_id}"/>
++	<input name="oldname" type="hidden"
++		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
++	<input name="type" type="hidden" value="nfsserver" />
++
++	<table class="formtable">
++		<tr>
++			<td>Name</td>
++			<td>
++				<input type="text" class="text" name="resourcename"
++					py:attrs="res and {'value':res.getAttribute('name')} or {}" />
++			</td>
++		</tr>
++		<tr>
++			<td>NFS recovery path</td>
++			<td>
++				<input type="text" class="text" name="nfspath"
++					py:attrs="res and {'value':res.getAttribute('nfspath')} or {'value':'.clumanager/nfs'}"/>
++			</td>
++		</tr>
++	</table>
++</div>
++
+ <div py:def="nfsclient_resource(res, form_id, parent_id, isref)" name="NFSCLIENT" id="nfsclient_resource" class="row rescfg"
+ 	py:attrs="res and {'id': 'global_res_%s' % res.getName(), 'name': res.getName()}">
+ 	<input name="global" type="hidden" value="1" py:if="res and isref != 0"/>
+@@ -1270,6 +1297,7 @@ ${clusterfs_resource(None,None,None,0)}
+ ${netfs_resource(None,None,None,0)}
+ ${nfsexport_resource(None,None,None,0)}
+ ${nfsclient_resource(None,None,None,0)}
++${nfsserver_resource(None,None,None,0)}
+ ${smb_resource(None,None,None,0)}
+ ${script_resource(None,None,None,0)}
+ ${apache_resource(None,None,None,0)}
+@@ -1331,6 +1359,7 @@ ${vm_resource(None,None,None,0)}
+ 		<option name="netfs_resource" value="netfs_resource">NFS/CIFS Mount</option>
+ 		<option name="nfsclient_resource" value="nfsclient_resource">NFS Client</option>
+ 		<option name="nfsexport_resource" value="nfsexport_resource">NFS v3 Export</option>
++		<option py:if="tmpl_context.cluster_version not in (1, 2)" name="nfsserver_resource" value="nfsserver_resource">NFS Server</option>
+ 		<option name="oracledb_resource" value="oracledb_resource">Oracle 10g/11g Failover Instance</option>
+ 		<option name="openldap_resource" value="openldap_resource">Open LDAP</option>
+ 		<option name="postgres8_resource" value="postgres8_resource">PostgreSQL 8</option>
+diff --git a/luci/widget_validators/validate_resource.py b/luci/widget_validators/validate_resource.py
+index 25b251d..faed469 100644
+--- a/luci/widget_validators/validate_resource.py
++++ b/luci/widget_validators/validate_resource.py
+@@ -11,6 +11,7 @@ from luci.lib.ClusterConf.Clusterfs import Clusterfs
+ from luci.lib.ClusterConf.Netfs import Netfs
+ from luci.lib.ClusterConf.NFSExport import NFSExport
+ from luci.lib.ClusterConf.NFSClient import NFSClient
++from luci.lib.ClusterConf.NFSServer import NFSServer
+ from luci.lib.ClusterConf.Script import Script
+ from luci.lib.ClusterConf.Samba import Samba
+ from luci.lib.ClusterConf.Tomcat5 import Tomcat5
+@@ -193,6 +194,14 @@ def addNFSExport(res, rname, model, **kw):
+ 	# Only the name is used
+ 	return []
+ 
++def addNFSServer(res, rname, model, **kw):
++	params = (
++		('nfspath', '', False, None),
++	)
++
++	errors = config_resource(params, res, rname, **kw)
++	return errors
++
+ def addScript(res, rname, model, **kw):
+ 	params = (
+ 		('file', _('Path to script'), True, None),
+@@ -370,6 +379,7 @@ resource_table = {
+ 	'netfs':		( addNetfs,			Netfs		),
+ 	'nfsexport':	( addNFSExport,		NFSExport	),
+ 	'nfsclient':	( addNFSClient,		NFSClient	),
++	'nfsserver':	( addNFSServer,		NFSServer	),
+ 	'script':		( addScript,		Script		),
+ 	'smb':			( addSamba,			Samba		),
+ 	'tomcat-5':		( addTomcat5,		Tomcat5		),
+
+commit 1670e1455d61ba94286285e2e1f0df90af26eb50
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Mon Jul 12 15:07:30 2010 -0400
+
+    Add NFSServer file needed for rhbz#604740
+
+diff --git a/luci/lib/ClusterConf/NFSServer.py b/luci/lib/ClusterConf/NFSServer.py
+new file mode 100644
+index 0000000..c04be73
+--- /dev/null
++++ b/luci/lib/ClusterConf/NFSServer.py
+@@ -0,0 +1,21 @@
++# Copyright (C) 2010 Red Hat, Inc.
++#
++# This program is free software; you can redistribute
++# it and/or modify it under the terms of version 2 of the
++# GNU General Public License as published by the
++# Free Software Foundation.
++
++from BaseResource import BaseResource
++from gettext import gettext as _
++
++TAG_NAME = 'nfsserver'
++RESOURCE_TYPE = _('NFS Server')
++
++DENY_ALL_CHILDREN = True
++
++class NFSServer(BaseResource):
++  def __init__(self):
++    BaseResource.__init__(self)
++    self.TAG_NAME = TAG_NAME
++    self.resource_type = RESOURCE_TYPE
++    self.deny_all_children = DENY_ALL_CHILDREN

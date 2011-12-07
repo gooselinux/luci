@@ -1,0 +1,156 @@
+commit a958cd4bc22cbac3be9bfb661fa335d265232b6c
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Tue Jul 13 12:55:36 2010 -0500
+
+    Remove fence_virsh from configuration.
+
+diff --git a/luci/templates/fence_devices.html b/luci/templates/fence_devices.html
+index 4225978..e010932 100644
+--- a/luci/templates/fence_devices.html
++++ b/luci/templates/fence_devices.html
+@@ -942,64 +942,6 @@
+ 	<input type="hidden" name="fence_type" value="fence_lpar" />
+ </div>
+ 
+-<div py:def="fence_virsh(cur_fencedev, ni)" id="fence_virsh" class="fencedevform row"
+-	 py:attrs="cur_fencedev and {'id': 'fd_%s' % cur_fencedev.getName()}">
+-	<table class="formtable">
+-		<tr>
+-			<td>Fence Type</td>
+-			<td>virsh fence agent</td>
+-		</tr>
+-		<tr>
+-			<td>Name</td>
+-			<td>
+-				<input name="name" type="text" class="text"
+-					py:attrs="cur_fencedev and {'value': cur_fencedev.getName()} or {}"/>
+-			</td>
+-		</tr>
+-		<tr>
+-			<td>IP address or hostname</td>
+-			<td>
+-				<input name="ipaddr" type="text" class="text"
+-					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('ipaddr')} or {}"/>
+-			</td>
+-		</tr>
+-		<tr>
+-			<td>Password</td>
+-			<td>
+-				<input name="passwd" type="password" class="text" autocomplete="off"
+-					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('passwd')} or {}"/>
+-			</td>
+-		</tr>
+-		<tr>
+-			<td>
+-				<span title="Full path to a script to generate fence password">Password Script (optional)</span>
+-			</td>
+-			<td>
+-				<input type="text" class="text" name="passwd_script"
+-					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('passwd_script')} or {}"/>
+-			</td>
+-		</tr>
+-		<tr>
+-			<td>Power wait (seconds)</td>
+-			<td>
+-				<input type="text" class="text" name="power_wait"
+-					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('power_wait')} or {}"/>
+-			</td>
+-		</tr>
+-	</table>
+-
+-	<py:if test="cur_fencedev">
+-		<input type="hidden"
+-			name="orig_name" value="${cur_fencedev.getName()}"/>
+-		<input type="hidden"
+-			name="existing_device" value="1" />
+-	</py:if>
+-
+-	<input type="hidden" name="sharable" value="1" />
+-	<input type="hidden" name="num_instances" value="${ni}"/>
+-	<input type="hidden" name="fence_type" value="fence_virsh" />
+-</div>
+-
+ <div py:def="fence_vmware(cur_fencedev, ni)" id="fence_vmware" class="fencedevform row"
+ 	 py:attrs="cur_fencedev and {'id': 'fd_%s' % cur_fencedev.getName()}">
+ 	<table class="formtable">
+@@ -2694,7 +2636,6 @@ ${fence_rackswitch(None,0)}
+ ${fence_xcat(None,0)}
+ ${fence_zvm(None,0)}
+ ${fence_ibmblade(None,0)}
+-${fence_virsh(None,0)}
+ </div>
+ 
+ <script type="text/javascript">
+@@ -2772,7 +2713,6 @@ ${fence_virsh(None,0)}
+ 				<option name="fence_ldom" value="fence_ldom">Sun LDOM</option>
+ 			</py:if>
+ 
+-			<option name="fence_virsh" value="fence_virsh">virsh fence agent</option>
+ 			<option name="fence_vixel" value="fence_vixel">Vixel SAN Switch</option>
+ 			<option name="fence_vmware" value="fence_vmware">VMware Fencing</option>
+ 			<option name="fence_wti" value="fence_wti">WTI Power Switch</option>
+diff --git a/luci/templates/fence_instances.html b/luci/templates/fence_instances.html
+index 78dffdc..556ff67 100644
+--- a/luci/templates/fence_instances.html
++++ b/luci/templates/fence_instances.html
+@@ -227,53 +227,6 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_virsh_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_virsh_instance"
+-	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+-	<table class="detailstable">
+-		<tr>
+-			<td>VM domain</td>
+-			<td>
+-				<input name="port" type="text" class="text"
+-					py:attrs="cur_fence_inst and {'value': cur_fence_inst.getAttribute('port')}"/>
+-			</td>
+-		</tr>
+-		<tr><td>
+-			<fieldset>
+-				<legend>SSH</legend>
+-				<table class="detailstable">
+-				 <tr>
+-					<td>
+-						<span title="Enable SSH operation">Use SSH</span>
+-					</td>
+-					<td>
+-						<input type="checkbox" class="checkbox" name="secure"
+-							py:attrs="cur_fence_inst and cur_fence_inst.getAttribute('secure') and {'checked': 'checked'}"/>
+-					</td>
+-				 </tr>
+-				 <tr>
+-					<td>Path to ssh identity file</td>
+-					<td>
+-						<input type="text" class="text" name="identity_file"
+-							py:attrs="cur_fence_inst and {'value': cur_fence_inst.getAttribute('identity_file')}"/>
+-					</td>
+-				 </tr>
+-				</table>
+-			</fieldset>
+-		</td></tr>
+-		<tr><td colspan="2">
+-			<div>
+-				<input type="button" name="remove_fence" value="Remove this instance"
+-					py:attrs="fi_id is not None and {'onclick': '$(\'#%s\').remove()' % fi_id} or {}"/>
+-			</div>
+-		</td></tr>
+-	</table>
+-
+-	<input type="hidden" name="fence_type" value="fence_virsh" />
+-	<input type="hidden" name="fence_instance" value="1" />
+-	<input type="hidden" name="parent_fencedev"
+-		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+-</div>
+-
+ <div py:def="fence_brocade_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_brocade_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+@@ -752,6 +705,5 @@ ${fence_eps_instance(None, None, None)}
+ ${fence_ibmblade_instance(None, None, None)}
+ ${fence_ifmib_instance(None, None, None)}
+ ${fence_intelmodular_instance(None, None, None)}
+-${fence_virsh_instance(None, None, None)}
+ </div>
+ </html>

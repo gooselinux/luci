@@ -1,0 +1,50 @@
+commit 932a96da156b11a8cf1015ff6822e462d77fe701
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Fri Jul 30 00:19:04 2010 -0400
+
+    Fix database transaction error that occurred when removing multiple nodes at a t ime
+
+diff --git a/luci/lib/db_helpers.py b/luci/lib/db_helpers.py
+index 28ce05d..6cc8bc2 100644
+--- a/luci/lib/db_helpers.py
++++ b/luci/lib/db_helpers.py
+@@ -212,15 +212,20 @@ def db_remove_cluster(cluster_name):
+         return False
+     return True
+ 
+-def db_remove_cluster_node(cluster_obj, node_name):
++def db_remove_cluster_node(cluster_name, node_name):
++    node_to_remove = None
+     try:
++        cluster_obj = get_cluster_db_obj(cluster_name)
+         for i in cluster_obj.nodes:
+             if i.node_name == node_name or i.hostname == node_name:
+-                cluster_obj.nodes.remove(i)
+-                DBSession.delete(i)
+-                DBSession.flush()
+-                transaction.commit()
+-                return True
++                node_to_remove = i
++                break
++
++        if node_to_remove is not None:
++            DBSession.delete(node_to_remove)
++            DBSession.flush()
++            transaction.commit()
++            return True
+     except:
+         log.exception('Error removing node "%s" from the database' % node_name)
+     return False
+diff --git a/luci/lib/ricci_helpers.py b/luci/lib/ricci_helpers.py
+index a6b76c0..db897cc 100644
+--- a/luci/lib/ricci_helpers.py
++++ b/luci/lib/ricci_helpers.py
+@@ -494,7 +494,7 @@ def cluster_node_delete(cluster_name, cluster_model, node_list):
+     for node in node_list:
+         try:
+             cluster_model.deleteNodeByName(node)
+-            db_remove_cluster_node(cluster_obj, node)
++            db_remove_cluster_node(cluster_name, node)
+         except Exception, e:
+             log.exception('Unable to delete node "%s" from the cluster configuration' % node)
+     update_cluster_conf(cluster_model)

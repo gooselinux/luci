@@ -1,0 +1,54 @@
+commit 3e7bc2685d3995d4bfbcc26c53c566f088a4c893
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Thu Jun 10 01:09:33 2010 -0400
+
+    Fix rhbz #600066: Update resource agent labels
+
+diff --git a/luci/templates/resource_list.html b/luci/templates/resource_list.html
+index 1c94124..bed0a4b 100644
+--- a/luci/templates/resource_list.html
++++ b/luci/templates/resource_list.html
+@@ -1300,6 +1300,7 @@ ${vm_resource(None,None,None,0)}
+ <div py:def="resource_selector(model, dest, parentid)" id="resource_select_area">
+ 	<select name="res_select" id="resource_selector" class="resource_selector"
+ 		py:with="
++			cluster_version = model and model.getClusterVersion() or '3';
+ 			svc_onchange_fn = 'insert_resource(this.options[this.selectedIndex].value, \'%s\', this.form, \'%s\');this.selectedIndex=0' % (dest, parentid);
+ 			res_onchange_fn = 'swap_resource_form(this.options[this.selectedIndex].value);this.selectedIndex=0'"
+ 		py:attrs="{'onchange': model and svc_onchange_fn or res_onchange_fn}">
+@@ -1318,15 +1319,22 @@ ${vm_resource(None,None,None,0)}
+ 		<option name="apache_resource" value="apache_resource">Apache</option>
+ 		<option name="drbd_resource" value="drbd_resource">DRBD</option>
+ 		<option name="fs_resource" value="fs_resource">Filesystem</option>
+-		<option name="clusterfs_resource" value="clusterfs_resource">GFS/GFS2</option>
++		<py:choose test="cluster_version">
++			<py:when test="'3'">
++				<option name="clusterfs_resource" value="clusterfs_resource">GFS2</option>
++			</py:when>
++			<py:otherwise>
++				<option name="clusterfs_resource" value="clusterfs_resource">GFS/GFS2</option>
++			</py:otherwise>
++		</py:choose>
+ 		<option name="ip_resource" value="ip_resource">IP Address</option>
+-		<option name="lvm_resource" value="lvm_resource">LVM</option>
++		<option name="lvm_resource" value="lvm_resource">HA LVM</option>
+ 		<option name="mysql_resource" value="mysql_resource">MySQL</option>
+ 		<option name="named_resource" value="named_resource">Named Configuration</option>
+ 		<option name="netfs_resource" value="netfs_resource">NFS/CIFS Mount</option>
+ 		<option name="nfsclient_resource" value="nfsclient_resource">NFS Client</option>
+-		<option name="nfsexport_resource" value="nfsexport_resource">NFS Export</option>
+-		<option name="oracledb_resource" value="oracledb_resource">Oracle 10g Failover Instance</option>
++		<option name="nfsexport_resource" value="nfsexport_resource">NFS v3 Export</option>
++		<option name="oracledb_resource" value="oracledb_resource">Oracle 10g/11g Failover Instance</option>
+ 		<option name="openldap_resource" value="openldap_resource">Open LDAP</option>
+ 		<option name="postgres8_resource" value="postgres8_resource">PostgreSQL 8</option>
+ 		<option name="sapdatabase_resource" value="sapdatabase_resource">SAP Database</option>
+@@ -1334,7 +1342,7 @@ ${vm_resource(None,None,None,0)}
+ 		<option name="smb_resource" value="smb_resource">Samba Server</option>
+ 		<option name="script_resource" value="script_resource">Script</option>
+ 		<option name="asehaagent_resource" value="asehaagent_resource">Sybase ASE Failover Instance</option>
+-		<option name="tomcat5_resource" value="tomcat5_resource">Tomcat 5</option>
++		<option name="tomcat5_resource" value="tomcat5_resource">Tomcat</option>
+ 		<option name="vm_resource" value="vm_resource" py:if="model">Virtual machine</option>
+ 	</select>
+ </div>

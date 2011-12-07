@@ -1,0 +1,155 @@
+commit 1347ea503233fbf65d576a41623ba725512eb98b
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Fri Jul 16 09:55:29 2010 -0400
+
+    Fix cluster node deletion
+
+diff --git a/luci/controllers/cluster.py b/luci/controllers/cluster.py
+index ad00032..99cb11c 100644
+--- a/luci/controllers/cluster.py
++++ b/luci/controllers/cluster.py
+@@ -264,7 +264,7 @@ class IndividualClusterController(BaseController):
+                 % (self.username, ', '.join(cur_list), self.name))
+             flash(_("Deleting nodes: %s") % ', '.join(cur_list),
+                 status='info')
+-            rh.cluster_node_delete(self.name, cur_list)
++            rh.cluster_node_delete(self.name, self.model, cur_list)
+         else:
+             log.error('User "%s" submitted unknown command "%s" for nodes "%s" from cluster "%s"' % (self.username, command, ', '.join(cur_list), self.name))
+             flash(_('An unknown command "%s" was given for nodes "%s"')
+diff --git a/luci/lib/ClusterConf/ModelBuilder.py b/luci/lib/ClusterConf/ModelBuilder.py
+index 8e75a47..eb711c5 100644
+--- a/luci/lib/ClusterConf/ModelBuilder.py
++++ b/luci/lib/ClusterConf/ModelBuilder.py
+@@ -541,10 +541,16 @@ class ModelBuilder:
+     return map(lambda x: x.getName(), self.clusternodes_ptr.getChildren())
+ 
+   def getNodeNameById(self, node_id):
+-    return filter(lambda x: x.getAttribute('nodeid') == node_id, self.clusternodes_ptr.getChildren())[0].getName()
++    try:
++      return filter(lambda x: x.getAttribute('nodeid') == node_id, self.clusternodes_ptr.getChildren())[0].getName()
++    except:
++      return None
+ 
+   def getNodeByName(self, node_name):
+-    return filter(lambda x: x.getAttribute('name') == node_name, self.clusternodes_ptr.getChildren())[0]
++    try:
++      return filter(lambda x: x.getAttribute('name') == node_name, self.clusternodes_ptr.getChildren())[0]
++    except:
++      return None
+ 
+   def addNode(self, clusternode):
+     self.clusternodes_ptr.addChild(clusternode)
+diff --git a/luci/lib/db_helpers.py b/luci/lib/db_helpers.py
+index d613384..f9c83dd 100644
+--- a/luci/lib/db_helpers.py
++++ b/luci/lib/db_helpers.py
+@@ -207,6 +207,16 @@ def db_remove_cluster(cluster_name):
+         return False
+     return True
+ 
++def db_remove_cluster_node(cluster_obj, node_name):
++    try:
++        for i in cluster_obj.nodes:
++            if i.node_name == node_name or i.hostname == node_name:
++                DBSession.delete(i)
++                return True
++    except:
++        log.exception('Error removing node "%s" from the database' % node_name)
++    return False
++
+ def get_cluster_task_status(cluster_name):
+     task_status = {}
+ 
+diff --git a/luci/lib/ricci_helpers.py b/luci/lib/ricci_helpers.py
+index ad8bd71..a6b76c0 100644
+--- a/luci/lib/ricci_helpers.py
++++ b/luci/lib/ricci_helpers.py
+@@ -12,7 +12,7 @@ from pylons.i18n import ugettext as _
+ from luci.model import metadata, DBSession
+ from luci.model.objects import Node, Cluster, Task
+ from luci.lib.cluster_status import ClusterStatus
+-from luci.lib.db_helpers import get_cluster_db_obj, get_node_by_host, get_agent_for_cluster, get_node_by_name
++from luci.lib.db_helpers import get_cluster_db_obj, get_node_by_host, get_agent_for_cluster, get_node_by_name, db_remove_cluster_node
+ from luci.lib.ricci_communicator import RicciCommunicator
+ import luci.lib.ricci_queries as rq
+ import luci.lib.luci_tasks as luci_tasks
+@@ -460,7 +460,7 @@ def cluster_node_reboot(cluster_name, node_list):
+             continue
+     return True
+ 
+-def cluster_node_delete(cluster_name, node_list):
++def cluster_node_delete(cluster_name, cluster_model, node_list):
+     cluster_obj = get_cluster_db_obj(cluster_name)
+     if not cluster_obj:
+         return False
+@@ -471,7 +471,7 @@ def cluster_node_delete(cluster_name, node_list):
+     try:
+         ret = send_batch_parallel(host_triples, 10)
+     except Exception, e:
+-        log.exception('An error occurred while stopping deleting "%s" nodes "%s"'
++        log.exception('An error occurred while deleting "%s" nodes "%s"'
+             % (cluster_name, node_list))
+         return False
+ 
+@@ -491,6 +491,14 @@ def cluster_node_delete(cluster_name, node_list):
+             log.exception('Unable to retrieve the batch number from %s' % i)
+             continue
+ 
++    for node in node_list:
++        try:
++            cluster_model.deleteNodeByName(node)
++            db_remove_cluster_node(cluster_obj, node)
++        except Exception, e:
++            log.exception('Unable to delete node "%s" from the cluster configuration' % node)
++    update_cluster_conf(cluster_model)
++
+ def cluster_svc_start(cluster_name, svc_name, target_node=None):
+     cluster_obj = get_cluster_db_obj(cluster_name)
+     if not cluster_obj:
+diff --git a/luci/templates/node.html b/luci/templates/node.html
+index 1ed9be6..842433d 100644
+--- a/luci/templates/node.html
++++ b/luci/templates/node.html
+@@ -84,8 +84,8 @@
+               <span class="entity_ok">${entity_name}</span>
+             </a>
+           </td>
+-          <td class="node_tlist_id">${nodeobj.getID()}</td>
+-          <td class="node_tlist_votes">${nodeobj.getVotes()}</td>
++          <td class="node_tlist_id">${nodeobj and nodeobj.getID()}</td>
++          <td class="node_tlist_votes">${nodeobj and nodeobj.getVotes()}</td>
+           <td class="node_tlist_status">${_('Cluster Member')}</td>
+           </py:when>
+           <!--! 2) Node is inactive. -->
+@@ -98,8 +98,8 @@
+               <span class="entity_fail">${entity_name}</span>
+             </a>
+           </td>
+-          <td class="node_tlist_id">${nodeobj.getID()}</td>
+-          <td class="node_tlist_votes">${nodeobj.getVotes()}</td>
++          <td class="node_tlist_id">${nodeobj and nodeobj.getID()}</td>
++          <td class="node_tlist_votes">${nodeobj and nodeobj.getVotes()}</td>
+           <td class="node_tlist_status">${_('Not a cluster member')}</td>
+           </py:when>
+           <!--! 3) Status of the node is unknown. -->
+@@ -112,12 +112,16 @@
+               <span class="entity_unknown">${entity_name}</span>
+             </a>
+           </td>
+-          <td class="node_tlist_id">${nodeobj.getID()}</td>
+-          <td class="node_tlist_votes">${nodeobj.getVotes()}</td>
++          <td class="node_tlist_id">${nodeobj and nodeobj.getID()}</td>
++          <td class="node_tlist_votes">${nodeobj and nodeobj.getVotes()}</td>
+           <td class="node_tlist_status">${_('The status of this node is unknown')}</td>
+           </py:when>
+           </py:choose>
+-          <td class="node_tlist_ip">${nodedbobj.hostname}</td>
++          <td class="node_tlist_ip">
++            <py:if test="nodedbobj">
++                ${nodedbobj.hostname}
++            </py:if>
++          </td>
+         </tr>
+         </py:if>
+         <py:if test="not cluster_status or not cluster_status.nodes"> 

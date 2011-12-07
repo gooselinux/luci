@@ -1,0 +1,154 @@
+commit 672db8e766e930dc86c7646829869b3df5ec0cb7
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Thu Jul 29 21:47:28 2010 -0400
+
+    Improve labels for password and port fields in
+    create cluster/add node/add existing dialogs
+    
+    Resolves: rhbz#617575
+
+diff --git a/luci/templates/add_existing.html b/luci/templates/add_existing.html
+index 9f95ff7..ce1ff09 100644
+--- a/luci/templates/add_existing.html
++++ b/luci/templates/add_existing.html
+@@ -4,13 +4,13 @@
+    <form name="add_existing_dialog" action="/add_existing_cmd">
+    <div class="row">
+    <p>Enter credentials for a node in the cluster you would like to add.</p>
+-   </div> 
++   </div>
+    <div class="row">
+    <table id="addclusternode">
+       <tr>
+          <td>Node Hostname</td>
+-         <td>Password</td>
+-         <td>Node Port</td>
++         <td>Root Password</td>
++         <td>Ricci Port</td>
+       </tr>
+       <tr>
+          <td><input type="text" class="text" name="hostname" id="node0host" value="" /></td>
+@@ -18,10 +18,10 @@
+          <td><input type="text" class="text" name="port" maxlength="5" size="5" value="11111" /></td>
+       </tr>
+     </table>
+-    </div>    
+-    <input type="button" class="button formsubmit blue" value="Connect" onClick="add_existing_async(this.form)" />   
++    </div>
++    <input type="button" class="button formsubmit blue" value="Connect" onClick="add_existing_async(this.form)" />
+     <input type="button" class="button formsubmit silver" value="Cancel"
+-        onclick="$('#add_existing_dialog').dialog('close')" />   
++        onclick="$('#add_existing_dialog').dialog('close')" />
+    </form>
+    </div>
+ </div>
+@@ -30,7 +30,7 @@
+    <div class="row">
+    <p>Cluster Name: <strong><span id="cluster_name_span" /></strong>
+                   <input type="hidden" id="clustername" name="clustername" value="" />
+-                  <input type="hidden" id="num_nodes" name="num_nodes" value="" />   
++                  <input type="hidden" id="num_nodes" name="num_nodes" value="" />
+    </p>
+    </div>
+    <div class="row">
+@@ -42,16 +42,16 @@
+        <table class="clusternodes">
+           <tr>
+              <td>Node Hostname</td>
+-             <td>Password</td>
+-             <td>Node Port</td>
++             <td>Root Password</td>
++             <td>Ricci Port</td>
+           </tr>
+       <tbody id="sys_tbody"></tbody>
+     </table>
+     </div>
+-   <div class="row">    
++   <div class="row">
+     <input type="submit" class="button formsubmit blue" value="Add Cluster" />
+     <input type="button" class="button formsubmit silver" value="Cancel"
+-        onclick="$('#add_existing_dialog').dialog('close')" />   
++        onclick="$('#add_existing_dialog').dialog('close')" />
+     </div>
+    </form>
+ </div>
+diff --git a/luci/templates/add_node.html b/luci/templates/add_node.html
+index 42b0794..c1a7efe 100644
+--- a/luci/templates/add_node.html
++++ b/luci/templates/add_node.html
+@@ -12,8 +12,8 @@
+        <tbody>
+        <tr>
+           <td>Node Hostname</td>
+-          <td>Password</td>
+-          <td>Node Port</td>
++          <td>Root Password</td>
++          <td>Ricci Port</td>
+           <td></td>
+        </tr>
+        <tr id="add_node_system_row_elem0" class="systemtriple">
+diff --git a/luci/templates/create_cluster.html b/luci/templates/create_cluster.html
+index 0ed4bbb..acf0d10 100644
+--- a/luci/templates/create_cluster.html
++++ b/luci/templates/create_cluster.html
+@@ -5,17 +5,17 @@
+         <input type="hidden" name="num_nodes" value="1" />
+     </div>
+     <div class="row">
+-      <input type="checkbox" class="checkbox" 
++      <input type="checkbox" class="checkbox"
+         name="allSameCheckBox" onclick="allPasswdsSame(this.form)" />
+         <label class="choice">Use same password for all nodes</label>
+     </div>
+-    <div class="row">    
++    <div class="row">
+     <table class="clusternodes">
+        <tbody>
+        <tr>
+           <td>Node Hostname</td>
+-          <td>Password</td>
+-          <td>Node Port</td>
++          <td>Root Password</td>
++          <td>Ricci Port</td>
+           <td></td>
+        </tr>
+        <tr id="create_cluster_system_row_elem0" class="systemtriple">
+@@ -26,30 +26,30 @@
+        </tr>
+        <tr class="add_node_button_row">
+           <td><input type="button" class="button small silver" value="Add Another Node" onclick="add_system_row(this.form)" /></td>
+-       </tr> 
++       </tr>
+        </tbody>
+     </table>
+     </div>
+     <div class="row">
+         <input type="radio" class="radio" name="download_pkgs" value="download" />
+         <label class="choice">Download Packages</label>
+-        <br />     
++        <br />
+         <input type="radio" class="radio" name="download_pkgs" value="local" checked="yes"/>
+         <label class="choice">Use locally installed packages</label>
+     </div>
+-    <div class="row">        
++    <div class="row">
+         <input type="checkbox" class="checkbox" name="reboot_nodes" />
+         <label class="choice">Reboot nodes before joining cluster</label>
+-    </div>  
+-    <div class="row">        
++    </div>
++    <div class="row">
+         <input type="checkbox" class="checkbox" name="shared_storage" />
+         <label class="choice">Enable shared storage support</label>
+-    </div>  
++    </div>
+     <div class="row">
+        <input type="submit" class="button formsubmit blue" value="Create Cluster" />
+        <input type="button" class="button formsubmit silver" value="Cancel"
+-        onclick="$('#create_cluster_dialog').dialog('close')" />   
+-    </div>  
++        onclick="$('#create_cluster_dialog').dialog('close')" />
++    </div>
+    </form>
+    <div class="hidden">
+     <table>

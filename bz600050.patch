@@ -1,0 +1,110 @@
+commit d4b06ea5844ba7ac7bfb9daff67a6e60f0b51360
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Thu Jun 10 01:45:57 2010 -0400
+
+    Fix rhbz #600050: luci requires wrongly requires users to fill interval / tko / minimum score / votes fields for qdisk configuration
+
+diff --git a/luci/widget_validators/validate_cluster_prop.py b/luci/widget_validators/validate_cluster_prop.py
+index 7a09d4a..16481b9 100644
+--- a/luci/widget_validators/validate_cluster_prop.py
++++ b/luci/widget_validators/validate_cluster_prop.py
+@@ -172,36 +172,28 @@ def validate_qdisk_prop_form(model, **kw):
+         return (False, {'errors': [ _('No changes were made to the quorum disk settings') ] })
+ 
+     interval = kw.get('interval')
+-    if not interval:
+-        errors.append(_('No qdisk interval value was given'))
+-    else:
++    if interval:
+         try:
+             interval = int(interval)
+         except ValueError:
+             errors.append(_('An invalid qdisk interval value was given: %s') % interval)
+ 
+     votes = kw.get('votes')
+-    if not votes:
+-        errors.append(_('No qdisk votes value was given'))
+-    else:
++    if votes:
+         try:
+             votes = int(votes)
+         except ValueError:
+             errors.append(_('An invalid qdisk votes value was given: %s') % votes)
+ 
+     tko = kw.get('tko')
+-    if not tko:
+-        errors.append(_('No qdisk TKO value was given'))
+-    else:
++    if tko:
+         try:
+             tko = int(tko)
+         except ValueError:
+             errors.append(_('An invalid qdisk TKO value was given: %s') % tko)
+ 
+     min_score = kw.get('min_score')
+-    if not min_score:
+-        errors.append(_('No qdisk minimum score value was given'))
+-    else:
++    if min_score:
+         try:
+             min_score = int(min_score)
+         except ValueError:
+@@ -217,9 +209,12 @@ def validate_qdisk_prop_form(model, **kw):
+ 
+     qd = QuorumD()
+     qd.addAttribute('interval', str(interval))
+-    qd.addAttribute('votes', str(votes))
+-    qd.addAttribute('tko', str(tko))
+-    qd.addAttribute('min_score', str(min_score))
++    if votes:
++        qd.addAttribute('votes', str(votes))
++    if tko:
++        qd.addAttribute('tko', str(tko))
++    if min_score:
++        qd.addAttribute('min_score', str(min_score))
+ 
+     if device:
+         qd.addAttribute('device', str(device))
+@@ -245,9 +240,6 @@ def validate_qdisk_prop_form(model, **kw):
+             except ValueError:
+                 errors.append(_('Invalid qdisk interval given for heuristic %d: %s')
+                     % (i + 1, hinterval))
+-        else:
+-            errors.append(_('No qdisk interval given for heuristic %d')
+-                % (i + 1))
+ 
+         if hscore:
+             try:
+@@ -255,9 +247,6 @@ def validate_qdisk_prop_form(model, **kw):
+             except ValueError:
+                 errors.append(_('Invalid qdisk score given for heuristic %d: %s')
+                     % (i + 1, hscore))
+-        else:
+-            errors.append(_('No qdisk score given for heuristic %d')
+-                % (i + 1))
+ 
+         if model.getClusterVersion() >= 3:
+             if htko:
+@@ -266,16 +255,16 @@ def validate_qdisk_prop_form(model, **kw):
+                 except ValueError:
+                     errors.append(_('Invalid qdisk TKO value given for heuristic %d: %s')
+                         % (i + 1, htko))
+-            else:
+-                errors.append(_('No qdisk TKO value given for heuristic %d')
+-                    % (i + 1))
+ 
+         qheur = Heuristic()
+         qheur.addAttribute('program',  str(hprog))
+-        qheur.addAttribute('interval', str(hinterval))
+-        qheur.addAttribute('score', str(hscore))
++        if hinterval:
++            qheur.addAttribute('interval', str(hinterval))
++        if hscore:
++            qheur.addAttribute('score', str(hscore))
+         if model.getClusterVersion() >= 3:
+-            qheur.addAttribute('tko', str(htko))
++            if htko:
++                qheur.addAttribute('tko', str(htko))
+         qd.addChild(qheur)
+ 
+     if len(errors) > 0:

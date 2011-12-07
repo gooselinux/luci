@@ -1,0 +1,51 @@
+commit 47acaa8a9da6713eceba81164385f0a2a7188c25
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Thu Jun 10 01:15:42 2010 -0400
+
+    Fix rhbz #600075: update fence_virt / fence_xvm configuration
+
+diff --git a/luci/templates/fence_devices.html b/luci/templates/fence_devices.html
+index d136cb6..85b377e 100644
+--- a/luci/templates/fence_devices.html
++++ b/luci/templates/fence_devices.html
+@@ -2696,8 +2696,9 @@ ${fence_virsh(None,0)}
+ </div>
+ 
+ <div py:def="fence_device_select(model, cont_id)" class="hidden" py:strip="">
+-    <div class="row">
+-	<div name="fence_select_area">
++	<div class="row">
++	<div name="fence_select_area"
++		py:with="cluster_version = model and model.getClusterVersion() or '3'">
+ 		<select name="select_div"
+ 			onchange="swap_fence_form(this.options[this.selectedIndex].value, '${cont_id}');this.selectedIndex=0">
+ 			<option>-- Select a fence device --</option>
+@@ -2720,8 +2721,17 @@ ${fence_virsh(None,0)}
+ 			<option name="fence_drac5" value="fence_drac5">Dell DRAC 5</option> <!-- needs work -->
+ 			<option name="fence_egenera" value="fence_egenera">Egenera SAN Controller</option>
+ 			<option name="fence_eps" value="fence_eps">ePowerSwitch</option>
+-			<option name="fence_virt" value="fence_virt">Fence virt</option>
+-			<option name="fence_xvm" value="fence_xvm">Fence xvm</option>
++
++			<py:choose test="cluster_version">
++				<py:when test="'3'">
++					<option name="fence_virt" value="fence_virt">Fence virt</option>
++					<option name="fence_xvm" value="fence_xvm">Fence virt (Multicast Mode)</option>
++				</py:when>
++				<py:otherwise>
++					<option name="fence_xvm" value="fence_xvm">Fence xvm</option>
++				</py:otherwise>
++			</py:choose>
++
+ 			<option name="fence_rsb" value="fence_rsb">Fujitsu Siemens RemoteView Service Board</option>			
+ 			<option name="fence_ilo" value="fence_ilo">HP iLO Device</option>
+ 			<option name="fence_ilo_mp" value="fence_ilo_mp">HP iLO MP</option> <!-- needs work -->
+@@ -2748,7 +2758,7 @@ ${fence_virsh(None,0)}
+ 			<option name="fence_xcat" value="fence_xcat">xCAT</option>
+ 			<option name="fence_zvm" value="fence_zvm">s390 z/VM</option>
+ 		</select>
+-    </div>
++	</div>
+ 	</div>
+ </div>
+ </html>

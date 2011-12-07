@@ -1,0 +1,25 @@
+commit 20827d629daa49baa8688bb87c49f1a642a63818
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Thu Jul 29 21:51:33 2010 -0400
+
+    Explicitly state the unit of time used for the sleeptime attribute of IP resources.
+    Autofill the field with the default (10s)
+    
+    Resolves: rhbz#617591
+
+diff --git a/luci/templates/resource_list.html b/luci/templates/resource_list.html
+index bfed5f4..75da32c 100644
+--- a/luci/templates/resource_list.html
++++ b/luci/templates/resource_list.html
+@@ -28,9 +28,10 @@
+ 			</td>
+ 		</tr>
+ 		<tr>
+-			<td>Amount of time to sleep after removing an IP address</td>
++			<td>Number of seconds to sleep after removing an IP address</td>
+ 			<td>
+ 				<input name="sleeptime" type="text" class="text"
++                    value="10"
+ 					py:attrs="res and {'value': res.getAttribute('sleeptime'), 'disabled':global_resource and 'disabled' or None} or {}" />
+ 			</td>
+ 		</tr>

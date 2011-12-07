@@ -1,0 +1,615 @@
+diff -urN luci-0.22.2/luci/controllers/cluster.py luci-0.22.2.new/luci/controllers/cluster.py
+--- luci-0.22.2/luci/controllers/cluster.py	2010-07-13 21:49:20.000000000 -0400
++++ luci-0.22.2.new/luci/controllers/cluster.py	2010-07-13 21:42:38.000000000 -0400
+@@ -23,6 +23,8 @@
+ from luci.widget_validators.validate_create_cluster_form import validate_create_cluster_form 
+ from luci.widget_validators.validate_fence import validateNewFenceDevice, validateFenceDevice
+ from luci.widget_validators.validate_resource import validate_clusvc_form, validate_resource_form
++from luci.lib.ClusterConf.Method import Method
++from luci.widget_validators.validate_fence import validate_fenceinstance
+ 
+ import logging
+ log = logging.getLogger(__name__)
+@@ -117,20 +119,104 @@
+                 status="error")
+             redirect(tmpl_context.cluster_url)
+ 
+-        vret = vcp.validate_node_fence_form(self.model, **kw)
+-        if vret[0] is True:
+-            log.info('User "%s" updated the fence properties for cluster "%s" node "%s"'
+-                % (self.username, self.name, kw.get('node')))
+-            flash(_('Updating fence settings'))
+-            msgs = vret[1].get('flash')
+-            if msgs:
+-                flash(', '.join(msgs))
++        if kw.get("method_to_remove"):
++            node = self.model.retrieveNodeByName(kw.get("node"))
++            methodname = kw.get("method_to_remove")
++            for child in node.getFenceNode().getChildren():
++                if child.getName() == methodname:
++                    node.getFenceNode().removeChild(child)
++                    break
+             self.model.setModified(True)
+             rh.update_cluster_conf(self.model)
+-        else:
+-            msgs = vret[1].get('errors')
+-            if msgs and len(msgs) > 0:
+-                flash(', '.join(msgs), status="error")
++
++        if kw.get("fenceinst_to_remove") and kw.get("fenceinst_to_remove_method"):
++            node = self.model.retrieveNodeByName(kw.get("node"))
++            fenceinst = kw.get("fenceinst_to_remove")
++            methodname = kw.get("fenceinst_to_remove_method")
++            for child in node.getFenceNode().getChildren():
++                if child.getName() == methodname:
++                    child.removeChild(child.children[int(fenceinst)-1])
++            self.model.setModified(True)
++            rh.update_cluster_conf(self.model)
++
++        if kw.get("moveup_method"):
++            node = self.model.retrieveNodeByName(kw.get("node"))
++            methodname = kw.get("moveup_method")
++            levels = node.getFenceLevels() 
++            for level in levels:
++                if level.getAttribute("name") == methodname:
++                    position = levels.index(level)
++                    if position > 0:
++                        levels.pop(position)
++                        levels.insert(position-1,level)
++                        self.model.setModified(True)
++                        rh.update_cluster_conf(self.model)
++                    break
++
++        if kw.get("movedown_method"):
++            node = self.model.retrieveNodeByName(kw.get("node"))
++            methodname = kw.get("movedown_method")
++            levels = node.getFenceLevels() 
++            for level in levels:
++                if level.getAttribute("name") == methodname:
++                    position = levels.index(level)
++                    if position < len(levels) - 1:
++                        levels.pop(position)
++                        levels.insert(position+1,level)
++                        self.model.setModified(True)
++                        rh.update_cluster_conf(self.model)
++                    break
++
++        if command == "AddFence":
++            node = self.model.retrieveNodeByName(kw.get("node"))
++            levels = node.getFenceLevels()
++            fence_method = Method()
++            fence_method.addAttribute('name', '1')
++            if len(levels) > 0:
++                methodname = kw['methodname']
++                fence_methods = node.getFenceLevels()
++                for i in fence_methods:
++                    if i.getAttribute("name") == methodname:
++                        fence_method = i
++                        break
++
++            parent_fencedev = kw['parent_fencedev'].replace('fd_', '', 1)
++
++            retcode, retobj = validate_fenceinstance(parent_fencedev, kw['fence_type'], **kw)
++            if retcode is True:
++                fence_method.addChild(retobj)
++                if len(levels) == 0:
++                    fence_node = node.getFenceNode()
++                    fence_node.addChild(fence_method)
++                flash(_('Updating fence settings'))
++                self.model.setModified(True)
++                rh.update_cluster_conf(self.model)
++            else:
++                msgs = retobj
++                if msgs and len(msgs) > 0:
++                    flash(', '.join(msgs), status="error")
++
++        if command == "EditFence":
++            node = self.model.retrieveNodeByName(kw.get("node"))
++            instance_id = kw.get("instance_id")
++            (method_num,sep,fence_instance_id) = instance_id.partition('-')
++
++            # Create the fence device, and if it succeeds replace the old one with the new one
++            retcode, retobj = validate_fenceinstance(kw["fencedev"], kw['fence_type'], **kw)
++            if retcode is True:
++                node.getFenceNode().children[int(method_num)].children[int(fence_instance_id)] = retobj
++                self.model.setModified(True)
++                rh.update_cluster_conf(self.model)
++
++        if command == "AddFenceMethod":
++            node = self.model.retrieveNodeByName(kw.get("node"))
++            methodname = kw.get("newmethodname")
++            method = Method()
++            method.addAttribute("name",methodname)
++            node.getFenceNode().addChild(method)
++            self.model.setModified(True)
++            rh.update_cluster_conf(self.model)
++
+         redirect('%s%s' % (tmpl_context.cluster_url, kw.get('node')))
+         
+     # This processes all of the commands that we can apply to a node
+diff -urN luci-0.22.2/luci/public/css/node.css luci-0.22.2.new/luci/public/css/node.css
+--- luci-0.22.2/luci/public/css/node.css	2010-05-28 16:29:25.000000000 -0400
++++ luci-0.22.2.new/luci/public/css/node.css	2010-07-13 21:42:38.000000000 -0400
+@@ -134,3 +134,12 @@
+ div.fencedev, div.fenceinst {
+     border: 2px groove gray;
+ }
++
++.fence_instances td, .fence_instances th, .fence_instances {
++  border: 1px;
++  background-color: #FFFFFF;
++}
++
++.fence_instances td {
++  border-bottom: 1px solid #e0e7eb;
++}
+diff -urN luci-0.22.2/luci/public/js/fence.js luci-0.22.2.new/luci/public/js/fence.js
+--- luci-0.22.2/luci/public/js/fence.js	2010-05-28 16:29:25.000000000 -0400
++++ luci-0.22.2.new/luci/public/js/fence.js	2010-07-13 21:42:38.000000000 -0400
+@@ -1,12 +1,31 @@
+ $(function() {
+     $('#create_fencedev_dialog').dialog({
+         modal: true,
+-        title: 'Create a Fence Device',
++        title: 'Add a Fence Instance',
+         width: '520px',
+         autoOpen: false,
+         draggable: false,
+         resizable: false,
+     });
++
++    $('#add_fencedev_dialog').dialog({
++        modal: true,
++        title: 'Add a Fence Device',
++        width: '520px',
++        autoOpen: false,
++        draggable: false,
++        resizable: false,
++    });
++
++    $('#create_fencemethod_dialog').dialog({
++        modal: true,
++        title: 'Create a Fence Method',
++        width: '520px',
++        autoOpen: false,
++        draggable: false,
++        resizable: false,
++    });
++
+ })
+ 
+ function swap_fence_form(fence_form_id, container_id) {
+diff -urN luci-0.22.2/luci/public/js/node.js luci-0.22.2.new/luci/public/js/node.js
+--- luci-0.22.2/luci/public/js/node.js	2010-05-28 16:29:25.000000000 -0400
++++ luci-0.22.2.new/luci/public/js/node.js	2010-07-13 21:42:38.000000000 -0400
+@@ -1,34 +1,26 @@
+-function add_fenceinst(parent_id) {
++function add_fenceinst(parent_id, fence_type, fence_device) {
+     var form_jelem = $(document.getElementById(parent_id));
+     if (!form_jelem) {
+         return;
+     }
+-    var num_inst = $('input[name="num_instances"]', form_jelem);
+-    var fence_type = $('input[name="fence_type"]', form_jelem).val();
+-    if (!fence_type || !num_inst) {
++    var num_inst = 1;
++    if (!fence_type) {
+         return;
+     }
+-    $(num_inst).val(Number($(num_inst).val()) + 1);
+     var inst_form_jelem = $(document.getElementById(fence_type + '_instance')).clone();
+     if (!inst_form_jelem) {
+         return;
+     }
+ 
+-    var fenceinst_id = parent_id + '_' + $(num_inst).val();
++    var fenceinst_id = parent_id;
+     $(inst_form_jelem).attr('id', fenceinst_id);
+     $(inst_form_jelem).attr('class', 'fenceinst');
+ 
+     var parent_dev = $('input[name="parent_fencedev"]', inst_form_jelem);
+-    $(parent_dev).val(parent_id);
++    $(parent_dev).val(fence_device);
+ 
+-    var remove_button = $('input[name="remove_fence"]', inst_form_jelem);
+-    $(remove_button).attr('onclick', '$(\'#' + fenceinst_id + '\').remove()');
+-
+-    var fencedev_inst_cont = $('.fence_instances', form_jelem);
+-    if (!fencedev_inst_cont) {
+-        return;
+-    }
+-    $(inst_form_jelem).appendTo($(fencedev_inst_cont));
++    $('input[name="remove_fence"]', inst_form_jelem).remove();
++    $(form_jelem).replaceWith($(inst_form_jelem));
+ }
+ 
+ function swap_fence_form(fence_form_id, flevel) {
+diff -urN luci-0.22.2/luci/templates/fence_devices.html luci-0.22.2.new/luci/templates/fence_devices.html
+--- luci-0.22.2/luci/templates/fence_devices.html	2010-07-13 21:49:20.000000000 -0400
++++ luci-0.22.2.new/luci/templates/fence_devices.html	2010-07-13 21:44:49.000000000 -0400
+@@ -2697,21 +2697,33 @@
+ ${fence_virsh(None,0)}
+ </div>
+ 
++<script type="text/javascript">
++  var fencedevicetype = new Array();
++</script>
++
+ <div py:def="fence_device_select(model, cont_id)" class="hidden" py:strip="">
+ 	<div class="row">
+ 	<div name="fence_select_area">
+-		<select name="select_div"
+-			onchange="swap_fence_form(this.options[this.selectedIndex].value, '${cont_id}');this.selectedIndex=0">
+-			<option>-- Select a fence device --</option>
+ 			<py:if test="model and len(model.getFenceDevices()) != 0">
++			<select name="select_div"
++			  onchange="add_fenceinst('${cont_id}',fencedevicetype[this.options[this.selectedIndex].value],this.options[this.selectedIndex].value);this.selectedIndex=0">
++			<option>-- Select a fence device --</option>
+ 				<option disabled="disabled">Existing fence devices</option>
+ 				<py:for each="fencedev in model.getFenceDevices()">
++				<script type="text/javascript">
++				  fencedevicetype['${'fd_%s' % fencedev.getName()}'] = "${fencedev.getAgentType()}";
++				</script>
+ 					<py:if test="fencedev.isShared() or len(cluster_data.getNodesUsingFence(fencedev.getName())) == 0">
+ 						<option value="${'fd_%s' % fencedev.getName()}">${fencedev.getName()} (${fencedev.getPrettyName()})</option>
+ 					</py:if>
+ 				</py:for>
+ 				<option disabled="disabled">-------------</option>
++			      </select>
+ 			</py:if>
++			<py:if test="not model">
++			<select name="select_div"
++			  onchange="swap_fence_form(this.options[this.selectedIndex].value, '${cont_id}');this.selectedIndex=0">
++			<option>-- Select a fence device --</option>
+ 			<option name="fence_apc" value="fence_apc">APC Power Switch</option>
+ 			<option name="fence_apc_snmp" value="fence_apc_snmp">APC Power Switch (SNMP interface)</option>
+ 			<option name="fence_wti" value="fence_wti">WTI Power Switch</option>
+@@ -2769,7 +2781,8 @@
+ 				<option name="fence_xcat" value="fence_xcat">xCAT</option>
+ 				<option name="fence_zvm" value="fence_zvm">s390 z/VM</option>
+ 			</py:if>
+-		</select>
++		      </select>
++		      </py:if>
+ 	</div>
+ 	</div>
+ </div>
+diff -urN luci-0.22.2/luci/templates/fence.html luci-0.22.2.new/luci/templates/fence.html
+--- luci-0.22.2/luci/templates/fence.html	2010-07-13 21:49:20.000000000 -0400
++++ luci-0.22.2.new/luci/templates/fence.html	2010-07-13 21:48:25.000000000 -0400
+@@ -55,7 +55,7 @@
+           <!--! 1) Local. -->
+           <td py:when="True" class="fence_tlist_members"
+               py:with="local_node = len(nodes_using) > 0 and nodes_using[0] or None">
+-            <py:choose test="cluster_status.nodes.get(local_node.getName(), {}).get('clustered', '')">
++            <py:choose test="cluster_status and cluster_status.nodes and cluster_status.nodes.get(local_node.getName()).clustered">
+             <span py:when="'true'" class="entity_ok">${local_node.getName()}</span>
+             <span py:when="'false'" class="entity_fail">${local_node.getName()}</span>
+             <span py:when="''" class="entity_unknown">${local_node.getName()}</span>
+diff -urN luci-0.22.2/luci/templates/homebase.html luci-0.22.2.new/luci/templates/homebase.html
+--- luci-0.22.2/luci/templates/homebase.html	2010-07-13 21:49:20.000000000 -0400
++++ luci-0.22.2.new/luci/templates/homebase.html	2010-07-13 21:42:38.000000000 -0400
+@@ -20,7 +20,7 @@
+ 
+ 	<div class="mainpage">
+ 	  <div py:if="homebasepage == 'homebasepage'">
+-	    <h2>Notifications</h2>
++	    <!--	    <h2>Notifications</h2> -->
+ 	    <h2><a href="${tg.url('/cluster')}" class="${('', 'active')[defined('page') and page=='clusters']}">Cluster Summary</a></h2>
+ 	    <div id="overview">
+ 	      <table id="clusters_tlist" class="maintable">
+diff -urN luci-0.22.2/luci/templates/node.html luci-0.22.2.new/luci/templates/node.html
+--- luci-0.22.2/luci/templates/node.html	2010-07-13 21:49:20.000000000 -0400
++++ luci-0.22.2.new/luci/templates/node.html	2010-07-13 21:44:18.000000000 -0400
+@@ -21,6 +21,7 @@
+ 
+   <script type="text/javascript" src="/js/add_nodes.js"></script>
+   <script type="text/javascript" src="/js/node.js"></script>
++  <script type="text/javascript" src="/js/fence.js"></script>
+ 
+   <xi:include href="fence_devices.html" />
+   <xi:include href="fence_instances.html" />
+@@ -227,101 +228,131 @@
+ 
+     <!-- DETAILS - fence devices section. -->
+     <div class="details_section">
+-      <h4>Fence Devices</h4>
++      <h4>Fence Devices</h4><br/>
+       <?python
+         from luci.widget_validators.validate_fence import getFenceInfo
+         fence_info = getFenceInfo(cluster_data, name)
++	fenceinst_num = 0
+       ?>
+       <div class="details_inner">
+        <form method="post" name="node_fence_form" action="${tg.url('nodes_fence_cmd')}">
++	 <input type="hidden" name="method_to_remove" value=""/>
++	 <input type="hidden" name="fenceinst_to_remove" value=""/>
++	 <input type="hidden" name="fenceinst_to_remove_method" value=""/>
++	 <input type="hidden" name="moveup_method" value=""/>
++	 <input type="hidden" name="movedown_method" value=""/>
+         <table id="node_tfences" class="detailstable">
+           <thead>
+             <tr class="grid_row">
+-              <th>Primary</th>
+-              <th>Secondary</th>
++	      <th width="5">Method</th>
++	      <th width="98%"></th>
++	      <th colspan="3"></th>
+             </tr>
+           </thead>
+           <tbody>
+-            <tr>
+-              <td id="primary_fence_dev">
+-                 <div id="fence_list_level1">
+-                    <py:for each="fd in fence_info['level1']"
+-                        py:with="cur_dev_id='fence_1_%s' % fd['id']">
+-                        <div class="fencedev" id="${cur_dev_id}">
+-                            <?python
+-                                agent_type = fd['obj'].getAgentType()
+-                                agent_fn = eval(agent_type)
+-                            ?>
+-                            ${agent_fn(fd['obj'], len(fd['instance_list']))}
+-                            <div class="fence_instances">
+-                                <py:for each="fin, fenceinst in enumerate(fd['instance_list'])">
+-                                    <?python
+-                                        inst_fn = eval(agent_type + '_instance')
+-                                    ?>
+-                                    ${inst_fn(fenceinst['obj'], cur_dev_id, '%s_%s' % (cur_dev_id, fin + 1))}
+-                                </py:for>
+-                            </div>
+-                            <py:if test="fd.get('isShared') is True">
+-                                <input type="button" value="Add instance"
+-                                  py:attrs="{'onclick': 'add_fenceinst(\'%s\')' % cur_dev_id}" />
+-                            </py:if>
+-                            <input type="button" value="Remove this fence device"
+-                                  py:attrs="{'onclick': '$(\'#%s\').remove()' % cur_dev_id}" />
+-                        </div>
+-                    </py:for>
+-                 </div>
+-                <div id="fence_selector_1">
+-                    ${fence_device_select(cluster_data, 1)}
+-                </div>
+-                <input type="hidden" name="num_fences_level_1" id="num_fences_level_1" value="${len(fence_info['level1'])}" />
+-                <input type="button" class="button small silver"
+-                    value="Add a fence to this level"
+-                    onclick="add_fence_device(1)"/>
+-              </td>
+-
+-              <td id="secondary_fence_dev">
+-                 <div id="fence_list_level2">
+-                    <py:for each="fd in fence_info['level2']"
+-                        py:with="cur_dev_id='fence_2_%s' % fd['id']">
+-                        <div class="fencedev" id="${cur_dev_id}">
+-                            <?python
+-                                agent_type = fd['obj'].getAgentType()
+-                                agent_fn = eval(agent_type)
+-                            ?>
+-                            ${agent_fn(fd['obj'], len(fd['instance_list']))}
+-                            <div class="fence_instances">
+-                                <py:for each="fin, fenceinst in enumerate(fd['instance_list'])">
+-                                    <?python
+-                                        inst_fn = eval(agent_type + '_instance')
+-                                    ?>
+-                                    ${inst_fn(fenceinst['obj'], cur_dev_id, '%s_%s' % (cur_dev_id, fin + 1))}
+-                                </py:for>
+-                            </div>
+-                            <py:if test="fd.get('isShared') is True">
+-                                <input type="button" value="Add instance"
+-                                  py:attrs="{'onclick': 'add_fenceinst(\'%s\')' % cur_dev_id}" />
+-                            </py:if>
+-                            <input type="button" value="Remove this fence device"
+-                                  py:attrs="{'onclick': '$(\'#%s\').remove()' % cur_dev_id}" />
+-                        </div>
+-                    </py:for>
+-                 </div>
+-                <div id="fence_selector_2">
+-                    ${fence_device_select(cluster_data, 2)}
+-                </div>
+-                <input type="hidden" name="num_fences_level_2" id="num_fences_level_2" value="${len(fence_info['level2'])}" />
+-                <input type="button" class="button small silver"
+-                    value="Add a fence to this level"
+-                    onclick="add_fence_device(2)"/>
+-              </td>
+-            </tr>
++	    <py:for each="order,(method,instances) in enumerate(fence_info)"
++	    py:with="cur_dev_id=method">
++	    <tr>
++	      <td colspan="2">${method.getName().replace(' ','&nbsp;')}</td>
++	      <td align="right">
++		<a py:if="order != 0" href="" onclick="document.node_fence_form.moveup_method.value = &quot;${method.getName()}&quot;;document.node_fence_form.submit();return false;">Move&nbsp;Up</a>
++	      </td>
++	      <td align="right">
++		<a py:if="order != len(fence_info)-1" href="" onclick="document.node_fence_form.movedown_method.value = &quot;${method.getName()}&quot;;document.node_fence_form.submit();return false;">Move&nbsp;Down</a>
++	      </td>
++	      <td align="right">
++		<a href="" onclick="document.node_fence_form.method_to_remove.value = &quot;${method.getName()}&quot;;document.node_fence_form.submit();return false;">Remove</a>
++	      </td>
++
++	    </tr>
++	    <tr>
++	      <td></td>
++	      <td colspan="4">
++		<table class="fence_instances">
++		  <tr>
++		    <th class="fence_instances">Name</th>
++		    <th>Type/Values</th>
++		    <th></th>
++		  </tr>
++		  <py:for each="instancenum,(fin,fd) in enumerate(instances)">
++		  <?python
++		    agent_type = fd.getAgentType()
++		    agent_name = fd.getPrettyName()
++		    agent_alias = fd.getName()
++		    fenceinst_num += 1
++		  ?>
++		  <?python
++		    inst_fn = eval(agent_type + '_instance')
++		    instance_id = "%s-%s" % (order, instancenum)
++		  ?>
++		  <tr><td>
++		      <div class="hidden">
++			<div id="edit_fencedev_dialog_${instance_id}">
++			  <form name="filler"/>
++			  <form name="edit_fence_device_${instance_id}" method="post" action="${tg.url('nodes_fence_cmd?command=EditFence')}">
++			    <input type="hidden" name="node" value="${name}"/>
++			    <input type="hidden" name="instance_id" value="${instance_id}"/>
++			    <input type="hidden" name="fencedev" value="${agent_alias}"/>
++
++			    <div id="fence_instance_area">
++			      <?python
++			      inst_fn = eval(agent_type + '_instance')
++			      inst_fn(fin, instance_id, None)
++			      ?>
++			      ${inst_fn(fin, cur_dev_id, '%s_%s' % (cur_dev_id, cur_dev_id))}
++			    </div>
++			    <div class="row">
++			      <input type="Submit" value="Submit" class="button formsubmit blue" />
++			      <input type="button" class="button formsubmit silver" value="Cancel"
++			      onclick="$('#edit_fencedev_dialog_${instance_id}').dialog('close')" />
++			    </div>    
++			  </form>
++			</div>
++		      </div>
++		    <script type="text/javascript">
++		      $('#edit_fencedev_dialog_${instance_id}').dialog({
++		        modal: true,
++			title: 'Edit Fence Instance',
++			width: '520px',
++			autoOpen: false,
++			draggable: false,
++			resizable: false,
++	              });
++		  </script>
++		  </td></tr>
++		  <tr>
++		    <td><a href="#" onclick="$('#edit_fencedev_dialog_${instance_id}').dialog('open')">${agent_alias}</a></td>
++		    <td>${agent_name}</td>
++		    <td align="right">
++		      <a href="" onclick="document.node_fence_form.fenceinst_to_remove_method.value = &quot;${method.getName()}&quot;;document.node_fence_form.fenceinst_to_remove.value = &quot;${fenceinst_num}&quot;;document.node_fence_form.submit();return false;">
++			<img src="/images/delete-grey.png"/>
++		      </a>
++		    </td>
++		  </tr>
++		  <tr py:for="key,val in fin.attr_hash.items()">
++		    <py:if test="key != 'obj' and key != 'name'">
++		    <td></td>
++		    <td>
++		      ${key} : ${val}
++		    </td>
++		    </py:if>
++		  </tr>
++		  </py:for>
++		  <tr>
++		    <td colspan="3">
++		      <input type="button" value="Add a Fence Instance" class="button small silver" onclick="$(create_fence_device.methodname).attr('value','${method.getName()}');$('#create_fencedev_dialog').dialog('open')"/>
++		    </td>
++		  </tr>
++		</table>
++	      </td>
++	    </tr>
++	    </py:for>
+           </tbody>
+         </table>
++	<div>
++	  <input type="button" value="Add a Fence Method" class="button small silver" onclick="$('#create_fencemethod_dialog').dialog('open')"/>
++	</div>
+         <input type="hidden" name="node" value="${name}"/>
+-        <input type="hidden" name="level1_xml" value="" />
+-        <input type="hidden" name="level2_xml" value="" />
+-        <input type="button" value="Apply" class="button formsubmit blue"
+-            onclick="gen_fence_xml(this.form)"/>
+        </form>
+       </div>
+     </div>
+@@ -360,5 +391,36 @@
+         <xi:include href="add_node.html" />
+     </div>
+   </div>
++
++  <xi:include href="fence_devices.html" />
++  ${fence_device_container()}
++  <div class="hidden">
++    <div id="create_fencedev_dialog">
++      <form name="create_fence_device" method="post" action="${tg.url('nodes_fence_cmd?command=AddFence')}">
++	<input type="hidden" name="node" value="${name}"/>
++	<input type="hidden" name="methodname" value=""/>
++	${fence_device_select(cluster_data, 'fence_form_area')}
++	<div id="fence_form_area" />
++	  <div class="row">
++	    <input type="Submit" value="Submit" class="button formsubmit blue" />
++	    <input type="button" class="button formsubmit silver" value="Cancel"
++	    onclick="$('#create_fencedev_dialog').dialog('close')" />
++	  </div>    
++	</form>
++      </div>
++    </div>
++  <div class="hidden">
++    <div id="create_fencemethod_dialog">
++      <form name="create_fence_method" method="post" action="${tg.url('nodes_fence_cmd?command=AddFenceMethod')}">
++	<input type="hidden" name="node" value="${name}"/>
++	Method Name:<input type="text" name="newmethodname" value="Method"/>
++	  <div class="row">
++	    <input type="Submit" value="Submit" class="button formsubmit blue" />
++	    <input type="button" class="button formsubmit silver" value="Cancel"
++	    onclick="$('#create_fencemethod_dialog').dialog('close')" />
++	  </div>    
++	</form>
++      </div>
++    </div>
+ </body>
+ </html>
+diff -urN luci-0.22.2/luci/widget_validators/validate_fence.py luci-0.22.2.new/luci/widget_validators/validate_fence.py
+--- luci-0.22.2/luci/widget_validators/validate_fence.py	2010-07-13 21:49:20.000000000 -0400
++++ luci-0.22.2.new/luci/widget_validators/validate_fence.py	2010-07-13 21:42:38.000000000 -0400
+@@ -1017,27 +1017,29 @@
+ 			cur_shared.append(shared_struct)
+ 	return (cur_level, cur_shared, major_num, minor_num)
+ 
++# Return a list of lists containing the level/method and fence instances for
++# that level
+ def getFenceInfo(model, nodename):
+-	fence_map = {'level1':[], 'level2':[], 'shared1': [], 'shared2':[]}
++    fence_map = []
+ 
+-	major_num = 1
+-	minor_num = 100
+-
+-	try:
+-		node = model.retrieveNodeByName(nodename)
+-	except Exception, e:
+-		return fence_map
+-
+-	fds = model.getFenceDevices()
+-	levels = node.getFenceLevels()
+-	len_levels = len(levels)
+-
+-	if len_levels == 0:
+-		return fence_map
+-
+-	if len_levels >= 1:
+-		(fence_map['level1'], fence_map['shared1'], major_num, minor_num) = get_fence_level_info(1, node, fds, major_num, minor_num)
+-	if len_levels >= 2:
+-		(fence_map['level2'], fence_map['shared2'], major_num, minor_num) = get_fence_level_info(2, node, fds, major_num, minor_num)
+-
+-	return fence_map
++    try:
++        node = model.retrieveNodeByName(nodename)
++    except Exception, e:
++        return fence_map
++
++    fds = model.getFenceDevices()
++    levels = node.getFenceLevels()
++    len_levels = len(levels)
++
++    if len_levels == 0:
++        return fence_map
++
++    for level in levels:
++        fence_map_level = [0,0]
++        fence_map_level[0] = level
++        fence_map_level[1] = []
++        instances = level.getChildren()
++        for instance in instances:
++            fence_map_level[1].append([instance,getDeviceForInstance(fds,instance.getName().strip())])
++        fence_map.append(fence_map_level)
++    return fence_map

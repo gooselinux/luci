@@ -1,0 +1,55 @@
+commit c1a786150d2831c089a8fc5e7dcf9ea6f76e100f
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Thu Jun 10 00:54:25 2010 -0400
+
+    Fix rhbz #600052: luci allows deletion of the last qdisk heuristics row
+
+diff --git a/luci/public/js/qdisk.js b/luci/public/js/qdisk.js
+index 6b1c38d..b736143 100644
+--- a/luci/public/js/qdisk.js
++++ b/luci/public/js/qdisk.js
+@@ -1,5 +1,14 @@
+ var oldInput = null;
+ 
++function remove_qdisk_heuristic(elem_id) {
++    var existing_heuristics = $('.qdisk_heuristic')
++    if ($(existing_heuristics).length == 1) {
++        $('input:text', existing_heuristics).val("");
++    } else {
++        $(document.getElementById(elem_id)).remove();
++    }
++}
++
+ function add_qdisk_heuristic() {
+     var parente = document.getElementById('qdisk_heuristics');
+     if (!parente)
+@@ -57,7 +66,7 @@ function add_qdisk_heuristic() {
+     var del_td = document.createElement('td');
+     var del_img = document.createElement('img');
+     del_img.setAttribute('src', '/images/delete-grey.png');
+-    del_img.setAttribute('onclick', '$("#' + tr_id_str + '").remove()');
++    del_img.setAttribute('onclick', 'remove_qdisk_heuristic("' + tr_id_str + '")');
+     del_td.appendChild(del_img);
+ 
+     var tr = document.createElement('tr');
+diff --git a/luci/templates/qdisk.html b/luci/templates/qdisk.html
+index 098a5f2..4f685d9 100644
+--- a/luci/templates/qdisk.html
++++ b/luci/templates/qdisk.html
+@@ -100,6 +100,7 @@
+                 <input type="text" class="text" name="heuristic0:htko" size="5"/>
+             </td>
+             <td>
++                <img src="/images/delete-grey.png" onclick="remove_qdisk_heuristic('qdisk_heuristic0')" style="cursor:pointer;" />
+             </td>
+ 	      </tr>
+ 	      </py:when>
+@@ -123,7 +124,7 @@
+                  py:attrs="{'value': hobj.getAttribute('tko') }"/>
+             </td>
+             <td>
+-                <img src="/images/delete-grey.png" onclick="$('#qdisk_heuristic${hnum}').remove()" style="cursor:pointer;" />
++                <img src="/images/delete-grey.png" onclick="remove_qdisk_heuristic('qdisk_heuristic${hnum}')" style="cursor:pointer;" />
+             </td>
+            </tr>
+ 	      </py:otherwise>

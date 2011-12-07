@@ -1,0 +1,96 @@
+commit 3f14ae70b45a560d2c63340cd90005ec5477a09e
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Fri Jul 9 11:52:10 2010 -0400
+
+    Exit with status 4 when run as a non-root, non-luci user. Also clean up the rest of the script.
+
+diff --git a/init.d/luci b/init.d/luci
+index fa96287..4b2ea82 100755
+--- a/init.d/luci
++++ b/init.d/luci
+@@ -51,6 +51,9 @@ elif [ -d /etc/default ]; then
+     [ -f /etc/default/luci ] && . /etc/default/luci
+ fi
+ 
++# Must be either root or the luci user to run this
++[ -w /var/lib/luci ] || exit 4
++
+ # Create the luci database if luci has not previously run (or the database
+ # has disappeared).
+ luci_init() {
+@@ -120,7 +123,7 @@ luci_init() {
+     return 0
+ }
+ 
+-lucid_start() {
++luci_start_server() {
+     service saslauthd start >&/dev/null
+ 
+     luci_status >& /dev/null
+@@ -133,7 +136,7 @@ lucid_start() {
+     return $?
+ }
+ 
+-lucid_stop() {
++luci_stop() {
+     luci_status >& /dev/null
+     if [ $? -ne 0 ]; then
+         # already stopped
+@@ -144,33 +147,28 @@ lucid_stop() {
+     fi
+ }
+ 
+-lucid_restart() {
+-    lucid_status >& /dev/null
++luci_restart() {
++    luci_status >& /dev/null
+     if [ $? -eq 0 ]; then
+-        lucid_stop || return 1
++        luci_stop || return 1
+     fi
+     luci_start
+     return $?
+ }
+ 
+-lucid_status() {
++luci_status() {
+     out=`/usr/bin/paster serve --status --daemon --user "$LUCI_USER" --group "$LUCI_GROUP" "$LUCI_CONFIG_FILE" --log-file="$LUCI_PASTER_LOG" --pid-file="$LUCI_PID_FILE"`
+     ret=$?
+     echo "$out" | tail -1
+     return $ret
+ }
+ 
+-lucid_running() {
+-    lucid_status >& /dev/null
+-    return $?
+-}
+-
+ luci_start() {
+     luci_init
+     if [ $? -ne 0 ]; then
+         return $?
+     fi
+-    lucid_start
++    luci_start_server
+     if [ $? -ne 0 ]; then
+         return $?
+     fi
+@@ -179,18 +177,6 @@ luci_start() {
+     return 0
+ }
+ 
+-luci_stop() {
+-    lucid_stop
+-}
+-
+-luci_status() {
+-    lucid_status   
+-}
+-
+-luci_restart() {
+-    lucid_restart 
+-}
+-
+ ret=0
+ 
+ case "$1" in

@@ -1,0 +1,188 @@
+commit 3218e361962dc4de92c80537f9a4b6ab803778b9
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Thu Jun 10 17:35:58 2010 -0500
+
+    Proper defaults now show up in Advanced Properties of network page
+    
+    Also, when defaults are entered in the advanced properties they do
+    not show up in the cluster.conf file.
+
+diff --git a/luci/lib/ClusterConf/Totem.py b/luci/lib/ClusterConf/Totem.py
+index 9ef2306..cd033cd 100644
+--- a/luci/lib/ClusterConf/Totem.py
++++ b/luci/lib/ClusterConf/Totem.py
+@@ -7,37 +7,59 @@
+ 
+ from TagObject import TagObject
+ 
++
+ TAG_NAME = 'totem'
+ 
+ class Totem(TagObject):
++  TOKEN_RETRANSMITS_BEFORE_LOSS = 4
++  TOKEN_TIMEOUT = 1000
++  JOIN_TIMEOUT = 50
++  CONSENSUS_TIMEOUT = 1200
++
+   def __init__(self):
+     TagObject.__init__(self)
+     self.TAG_NAME = TAG_NAME
+ 
+   def getJoinTimeout(self):
+     try:
+-      return self.getAttribute('join')
++      join_timeout = self.getAttribute('join')
++      if join_timeout == None:
++        return self.JOIN_TIMEOUT
++      else:
++        return join_timeout
+     except:
+       pass
+     return None
+ 
+   def getTokenTimeout(self):
+     try:
+-      return self.getAttribute('token')
++      token_timeout = self.getAttribute('token')
++      if token_timeout == None:
++        return self.TOKEN_TIMEOUT
++      else:
++        return token_timeout
+     except:
+       pass
+     return None
+ 
+   def getTokenRetransmits(self):
+     try:
+-      return self.getAttribute('token_retransmits_before_loss_const')
++      token_retrans = self.getAttribute('token_retransmits_before_loss_const')
++      if token_retrans == None:
++        return self.TOKEN_RETRANSMITS_BEFORE_LOSS
++      else:
++        return token_retrans
+     except:
+       pass
+     return None
+ 
+   def getConsensusTimeout(self):
+     try:
+-      return self.getAttribute('consensus')
++      consensus_timeout = self.getAttribute('consensus')
++      if consensus_timeout == None:
++        return self.CONSENSUS_TIMEOUT
++      else:
++        return consensus_timeout
+     except:
+       pass
+     return None
+diff --git a/luci/lib/app_globals.py b/luci/lib/app_globals.py
+index 09fa724..8d28523 100644
+--- a/luci/lib/app_globals.py
++++ b/luci/lib/app_globals.py
+@@ -10,6 +10,7 @@
+ 
+ from luci.controllers.scheme import LuciScheme
+ from luci.lib.form_utils import FormUtils
++from luci.lib.ClusterConf.Totem import Totem
+ 
+ __all__ = ['Globals']
+ 
+@@ -26,5 +27,6 @@ class Globals(object):
+         """Prepare some common static functions, constants etc."""
+         self.form_utils = FormUtils
+         self.scheme = LuciScheme
++        self.totem = Totem
+         self.data = None
+ 
+diff --git a/luci/templates/configure.html b/luci/templates/configure.html
+index 490fae3..8f9ec38 100644
+--- a/luci/templates/configure.html
++++ b/luci/templates/configure.html
+@@ -12,8 +12,8 @@
+ </head>
+ 
+ <body py:with="cluster_data = tmpl_context.cluster_data;
+-               form_utils = app_globals.form_utils">
+-
++               form_utils = app_globals.form_utils;
++               totem_defaults = app_globals.totem;">
+   <div class="sectionblock">
+     <xi:include href="submenu.html"/>
+     <div style="clear:both;"></div>
+@@ -110,10 +110,10 @@
+ 
+ 		   <div id="advanced"
+ 		    py:with="totem=cluster_data and cluster_data.getTotemPtr()">
+-	          <div class="row"><label>Token Timeout (ms)</label><input name="token_timeout" class="text" type="text" py:attrs="totem and { 'value': totem.getTokenTimeout() } or {}"/></div>
+-	          <div class="row"><label>Number of token retransmits</label><input name="token_retransmits" class="text" type="text" py:attrs="totem and { 'value': totem.getTokenRetransmits() } or {}"/></div>
+-	          <div class="row"><label>Join Timeout (ms)</label><input name="join_timeout" class="text" type="text" py:attrs="totem and { 'value': totem.getJoinTimeout() } or {}"/></div>
+-	          <div class="row"><label>Consensus Timeout (ms)</label><input name="consensus_timeout" class="text" type="text" py:attrs="totem and { 'value': totem.getConsensusTimeout() } or {}"/></div>
++		     <div class="row"><label>Token Timeout (ms)</label><input name="token_timeout" class="text" type="text" py:attrs="totem and { 'value': totem.getTokenTimeout() } or {'value': totem_defaults.TOKEN_TIMEOUT}"/></div>
++		     <div class="row"><label>Number of token retransmits</label><input name="token_retransmits" class="text" type="text" py:attrs="totem and { 'value': totem.getTokenRetransmits() } or {'value': totem_defaults.TOKEN_RETRANSMITS_BEFORE_LOSS}"/></div>
++		     <div class="row"><label>Join Timeout (ms)</label><input name="join_timeout" class="text" type="text" py:attrs="totem and { 'value': totem.getJoinTimeout() } or {'value': totem_defaults.JOIN_TIMEOUT}"/></div>
++		     <div class="row"><label>Consensus Timeout (ms)</label><input name="consensus_timeout" class="text" type="text" py:attrs="totem and { 'value': totem.getConsensusTimeout() } or {'value': totem_defaults.CONSENSUS_TIMEOUT}"/></div>
+ 		   </div>
+ 	    <div class="row"><input type="submit" class="button formsubmit blue" value="Apply"/>
+         </div>
+diff --git a/luci/widget_validators/validate_cluster_prop.py b/luci/widget_validators/validate_cluster_prop.py
+index 16481b9..ab61735 100644
+--- a/luci/widget_validators/validate_cluster_prop.py
++++ b/luci/widget_validators/validate_cluster_prop.py
+@@ -18,6 +18,8 @@ from luci.lib.ClusterConf.Method import Method
+ from luci.lib.db_helpers import create_cluster_obj
+ from luci.lib.ricci_communicator import RicciCommunicator
+ from luci.lib.ricci_helpers import send_batch_parallel
++from luci.lib.ClusterConf.Totem import Totem
++
+ from validate_fence import validateFenceDevice, validateNewFenceDevice, validate_fenceinstance
+ 
+ from xml.dom import minidom
+@@ -404,7 +406,10 @@ def validate_cluster_config_form(model, **kw):
+             except:
+                 errors.append(_('Invalid value for totem join timeout : %s') % join_timeout)
+             else:
+-                totem.addAttribute('join', join_timeout)
++                if int(join_timeout) != Totem.JOIN_TIMEOUT:
++                    totem.addAttribute('join', join_timeout)
++                else:
++                    totem.removeAttribute('join')
+ 
+         token_timeout = kw.get('token_timeout')
+         if token_timeout:
+@@ -415,7 +420,10 @@ def validate_cluster_config_form(model, **kw):
+             except:
+                 errors.append(_('Invalid value for totem token timeout : %s') % token_timeout)
+             else:
+-                totem.addAttribute('token', token_timeout)
++                if int(token_timeout) != Totem.TOKEN_TIMEOUT:
++                    totem.addAttribute('token', token_timeout)
++                else:
++                    totem.removeAttribute('token')
+ 
+         token_retransmits = kw.get('token_retransmits')
+         if token_retransmits:
+@@ -426,7 +434,10 @@ def validate_cluster_config_form(model, **kw):
+             except:
+                 errors.append(_('Invalid value for totem token retransmits before loss: %s') % token_retransmits)
+             else:
+-                totem.addAttribute('token_retransmits_before_loss_const', token_retransmits)
++                if int(token_retransmits) != Totem.TOKEN_RETRANSMITS_BEFORE_LOSS:
++                    totem.addAttribute('token_retransmits_before_loss_const', token_retransmits)
++                else:
++                    totem.removeAttribute('token_retransmits_before_loss_const')
+ 
+         consensus_timeout = kw.get('consensus_timeout')
+         if consensus_timeout:
+@@ -437,7 +448,11 @@ def validate_cluster_config_form(model, **kw):
+             except:
+                 errors.append(_('Invalid value for totem consensus timeout : %s') % consensus_timeout)
+             else:
+-                totem.addAttribute('consensus', consensus_timeout)
++                if int(consensus_timeout) != Totem.CONSENSUS_TIMEOUT:
++                    totem.addAttribute('consensus', consensus_timeout)
++                else:
++                    totem.removeAttribute('consensus')
++
+         return (len(errors) < 1, {'errors': errors})
+     else:
+         return (False, {'errors':

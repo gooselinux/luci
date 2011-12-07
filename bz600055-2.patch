@@ -1,0 +1,26 @@
+commit bc2d2c34e6f58344054f3d4cc30d6b84637e734e
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Tue Jul 27 16:19:27 2010 -0500
+
+    One last fix to catch a corner case on adding clusters for cluster busy.
+
+diff --git a/luci/templates/node.html b/luci/templates/node.html
+index 4ebbadf..a2663d8 100644
+--- a/luci/templates/node.html
++++ b/luci/templates/node.html
+@@ -141,7 +141,6 @@
+             </py:if>
+           </td>
+         </tr>
+-        </py:if>
+         <tr py:for="i in nodes"
+           py:with="hostname = i.hostname">
+ 	  <py:if test="cluster_status.nodes.keys().count(i.hostname) == 0">
+@@ -159,6 +158,7 @@
+           <td class="node_tlist_status">${_('This node is currently being added')}</td>
+ 	  </py:if>
+         </tr>
++        </py:if>
+       </tbody>
+     </table>
+   </div>

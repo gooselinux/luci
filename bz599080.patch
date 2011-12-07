@@ -1,0 +1,29 @@
+commit 107ca97f2c7df82b6f6a8c3bf58e4e700437a255
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Thu Jun 10 00:32:21 2010 -0400
+
+    Fix rhbz #599080: Conga ignores "reboot nodes" check box
+
+diff --git a/luci/widget_validators/validate_create_cluster_form.py b/luci/widget_validators/validate_create_cluster_form.py
+index b48e1ed..1ea32b1 100644
+--- a/luci/widget_validators/validate_create_cluster_form.py
++++ b/luci/widget_validators/validate_create_cluster_form.py
+@@ -47,16 +47,8 @@ def validate_create_cluster_form(self, **kw):
+         flash(_('An error occurred while trying to query the luci database'), 'error')
+         return
+ 
+-    create_opt_args = kw.get('opt')
+-    if create_opt_args is None:
+-        create_opts = []
+-    elif isinstance(create_opt_args, list):
+-        create_opts = create_opt_args
+-    else:
+-        create_opts = [ create_opt_args ]
+-
+-    enable_storage = 'shared_storage' in create_opts
+-    reboot_nodes = 'reboot_nodes' in create_opts
++    enable_storage = kw.get('shared_storage') is not None
++    reboot_nodes = kw.get('reboot_nodes') is not None
+     download_pkgs = kw.get('download_pkgs') == 'download'
+ 
+     num_nodes = kw.get('num_nodes')

@@ -1,0 +1,426 @@
+commit 241bb3de7952f343506fbf324bcc984936cf7742
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Wed Jul 21 11:22:10 2010 -0400
+
+    Add node bits
+
+diff --git a/luci/controllers/cluster.py b/luci/controllers/cluster.py
+index 6fc376f..1194f28 100644
+--- a/luci/controllers/cluster.py
++++ b/luci/controllers/cluster.py
+@@ -20,7 +20,7 @@ from luci.lib.base import BaseController
+ from luci.lib.db_helpers import get_cluster_list, get_model_for_cluster, get_status_for_cluster, db_remove_cluster, get_agent_for_cluster, get_cluster_db_obj
+ import luci.lib.ricci_helpers as rh
+ import luci.widget_validators.validate_cluster_prop as vcp
+-from luci.widget_validators.validate_create_cluster_form import validate_create_cluster_form 
++from luci.widget_validators.validate_create_cluster_form import validate_create_cluster_form, validate_node_add_form
+ from luci.widget_validators.validate_fence import validateNewFenceDevice, validateFenceDevice
+ from luci.widget_validators.validate_resource import validate_clusvc_form, validate_resource_form
+ from luci.lib.ClusterConf.Method import Method
+@@ -103,13 +103,12 @@ class IndividualClusterController(BaseController):
+     @expose("luci.templates.node")
+     def nodes(self):
+         db = get_cluster_db_obj(self.name)
+-
+         return dict(use_referrer=False, page='nodes', name=self.nodename, base_url='/nodes', nodes=db.nodes)
+ 
+     @expose("luci.templates.node")
+     def add_nodes_cmd(self, command=None, **kw):
+         db = get_cluster_db_obj(self.name)
+-
++        vret = validate_node_add_form(self.model, db, **kw)
+         return dict(use_referrer=False, page='nodes', name=self.nodename, base_url='/nodes', nodes=db.nodes)
+ 
+     @expose("luci.templates.node")
+diff --git a/luci/lib/ricci_queries.py b/luci/lib/ricci_queries.py
+index 1a53c49..7537b96 100644
+--- a/luci/lib/ricci_queries.py
++++ b/luci/lib/ricci_queries.py
+@@ -10,16 +10,20 @@ from pylons.i18n import ugettext as _
+ from xml.dom import minidom
+ from ricci_communicator import batch_status
+ 
+-def addClusterNodeBatch(cluster_name,
++def addClusterNodeBatch(model,
+ 						install_base,
+ 						install_services,
+ 						install_shared_storage,
+-						install_LVS,
+ 						upgrade_rpms,
+-						gulm,
+ 						reboot_nodes=False):
+ 	batch = list()
+ 
++	clusterconf = model.exportModelAsString()
++	conf = str(clusterconf).replace('<?xml version="1.0"?>', '')
++	conf = conf.replace('<?xml version="1.0" ?>', '')
++	conf = conf.replace('<? xml version="1.0"?>', '')
++	conf = conf.replace('<? xml version="1.0" ?>', '')
++
+ 	batch.append('<module name="rpm">')
+ 	batch.append('<request API_version="1.0">')
+ 	batch.append('<function_call name="install">')
+@@ -29,16 +33,11 @@ def addClusterNodeBatch(cluster_name,
+ 		batch.append('<var name="upgrade" type="boolean" value="false"/>')
+ 	batch.append('<var name="sets" type="list_xml">')
+ 	if install_base or install_services or install_shared_storage:
+-		if gulm:
+-			batch.append('<set name="Cluster Base - Gulm"/>')
+-		else:
+-			batch.append('<set name="Cluster Base"/>')
++		batch.append('<set name="Cluster Base"/>')
+ 	if install_services:
+ 		batch.append('<set name="Cluster Service Manager"/>')
+ 	if install_shared_storage:
+ 		batch.append('<set name="Clustered Storage"/>')
+-	if install_LVS:
+-		batch.append('<set name="Linux Virtual Server"/>')
+ 	batch.append('</var>')
+ 	batch.append('</function_call>')
+ 	batch.append('</request>')
+@@ -49,16 +48,11 @@ def addClusterNodeBatch(cluster_name,
+ 	batch.append('<function_call name="disable">')
+ 	batch.append('<var mutable="false" name="services" type="list_xml">')
+ 	if install_base or install_services or install_shared_storage:
+-		if gulm:
+-			batch.append('<set name="Cluster Base - Gulm"/>')
+-		else:
+-			batch.append('<set name="Cluster Base"/>')
++		batch.append('<set name="Cluster Base"/>')
+ 	if install_services:
+ 		batch.append('<set name="Cluster Service Manager"/>')
+ 	if install_shared_storage:
+ 		batch.append('<set name="Clustered Storage"/>')
+-	if install_LVS:
+-		batch.append('<set name="Linux Virtual Server"/>')
+ 	batch.append('</var>')
+ 	batch.append('</function_call>')
+ 	batch.append('</request>')
+@@ -82,15 +76,7 @@ def addClusterNodeBatch(cluster_name,
+ 	batch.append('<request API_version="1.0">')
+ 	batch.append('<function_call name="set_cluster.conf">')
+ 	batch.append('<var mutable="false" name="propagate" type="boolean" value="false"/>')
+-	batch.append('<var mutable="false" name="cluster.conf" type="xml">')
+-	batch.append('<cluster config_version="1" name="%s">' % cluster_name)
+-	batch.append('<fence_daemon post_fail_delay="0" post_join_delay="3"/>')
+-	batch.append('<clusternodes/>')
+-	batch.append('<cman/>')
+-	batch.append('<fencedevices/>')
+-	batch.append('<rm/>')
+-	batch.append('</cluster>')
+-	batch.append('</var>')
++	batch.append('<var mutable="false" name="cluster.conf" type="xml">%s</var>' % conf)
+ 	batch.append('</function_call>')
+ 	batch.append('</request>')
+ 	batch.append('</module>')
+@@ -707,3 +693,16 @@ def create_cluster(	rc,
+ 					gulm_lockservers, reboot_nodes)
+ 	ricci_xml = rc.batch_run(batch_str)
+ 	return batchAttemptResult(ricci_xml)
++
++def create_cluster_nodes(	rc, 
++							model,
++							install_base,
++							install_services,
++							install_shared_storage,
++							upgrade_rpms,
++							reboot_nodes=False):
++
++	batch_str = addClusterNodeBatch(model, install_base, install_services,
++					install_shared_storage, upgrade_rpms, reboot_nodes)
++	ricci_xml = rc.batch_run(batch_str)
++	return batchAttemptResult(ricci_xml)
+diff --git a/luci/widget_validators/validate_create_cluster_form.py b/luci/widget_validators/validate_create_cluster_form.py
+index 1ea32b1..919f9e0 100644
+--- a/luci/widget_validators/validate_create_cluster_form.py
++++ b/luci/widget_validators/validate_create_cluster_form.py
+@@ -7,17 +7,16 @@
+ 
+ # -*- coding: utf-8 -*-
+ 
+-from tg import flash, request, redirect, expose, tmpl_context, app_globals, validate
+-from pylons.i18n import ugettext as _, lazy_ugettext as l_
++from tg import flash, redirect
++from pylons.i18n import ugettext as _
+ 
+-from luci.controllers.decorators import *
+-
+-from luci.model import metadata, DBSession
++from luci.model import DBSession
+ from luci.model.objects import Node, Cluster, Task
+-from luci.model.auth import User
+ 
+-from luci.lib.ricci_helpers import send_batch_to_hosts
++from luci.lib.ricci_helpers import send_batch_to_hosts, update_cluster_conf
+ from luci.lib.ricci_communicator import RicciCommunicator
++from luci.lib.db_helpers import get_node_by_host
++from luci.lib.ClusterConf.ClusterNode import ClusterNode
+ import luci.lib.ricci_queries as rq
+ 
+ import luci.lib.luci_tasks as luci_tasks
+@@ -26,7 +25,7 @@ import logging
+ log = logging.getLogger(__name__)
+ 
+ def validate_create_cluster_form(self, **kw):
+-    errors = [];
++    errors = []
+ 
+     cluster_name = kw.get('cluster_name')
+     if not cluster_name or len(cluster_name) < 1:
+@@ -156,3 +155,139 @@ def validate_create_cluster_form(self, **kw):
+ 
+     flash(_('Creating the cluster "%s", this may take up to 30 seconds.  Please refresh screen to view created cluster.') % cluster_name, 'info')
+     redirect("/cluster")
++
++# TODO: refactor to share common bits with the validation for
++#       cluster create
++
++def validate_node_add_form(model, db_obj, **kw):
++    errors = []
++    cluster_name = model.getClusterName()
++
++    enable_storage = kw.get('shared_storage') is not None
++    reboot_nodes = kw.get('reboot_nodes') is not None
++    download_pkgs = kw.get('download_pkgs') == 'download'
++    num_nodes = kw.get('num_nodes')
++
++    if num_nodes:
++        try:
++            num_nodes = int(num_nodes) + 1
++        except ValueError, e:
++            num_nodes = None
++
++    if not num_nodes:
++        flash(_('No number of nodes was given'), 'error')
++        return
++
++    nodes = []
++    for cur in xrange(num_nodes):
++        cur_host = kw.get('hostname%d' % cur)
++        cur_passwd = kw.get('password%d' % cur)
++        cur_port = kw.get('port%d' % cur)
++        if not cur_host:
++            continue
++        if not cur_port:
++            cur_port = '11111'
++        if not cur_passwd:
++            errors.append(_('No password was provided for node "%s"') % cur_host)
++            continue
++
++        node_db_obj = get_node_by_host(cur_host)
++        if node_db_obj is not None:
++            errors.append(_('The host "%s" is already a member of cluster %s')
++                % (cur_host, node_db_obj.cluster[0].name))
++
++        nodes.append([ cur_host, cur_passwd, cur_port ])
++
++    if len(nodes) < 1:
++        errors.append(_('No cluster nodes were given'))
++
++    last_node_id = 0
++    try:
++        last_node_id = max([int(n.getID()) for n in model.getNodes()])
++    except:
++        errors.append(_('Error getting node IDs for cluster %s') % cluster_name)
++        log.exception('Error getting node IDs for cluster %s' % cluster_name)
++
++    if len(errors) > 0:
++        flash(_('The following errors occurred while adding nodes to cluster "%s": %s') % (cluster_name, ', '.join(errors)), 'error')
++        return
++
++    nodes_ptr = model.getClusterNodesPtr()
++    node_list = []
++    node_db_obj = {}
++    task_db_obj = {}
++    for node in nodes:
++        try:
++            rc = RicciCommunicator(node[0], port=int(node[2]), enforce_trust=False)
++            rc.trust()
++            rc.auth(node[1])
++            if not rc.authed():
++                errors.append('Authentication to the ricci agent at %s:%d failed'
++                    % (node[0], node[2]))
++                continue
++
++            rc = RicciCommunicator(node[0])
++            cur_cluster_name = rc.cluster_info()[0]
++            if cur_cluster_name:
++                errors.append('%s is already a member of a cluster named "%s"'
++                    % (node[0], cur_cluster_name))
++                continue
++
++            node_list.append(node[0])
++            node_db_obj[node[0]] = Node(node_name=node[0],
++                                        display_name=node[0],
++                                        hostname=node[0],
++                                        ipaddr=node[0],
++                                        port=node[2])
++
++            last_node_id += 1
++            new_node = ClusterNode()
++            new_node.setAttribute('name', node[0])
++            new_node.setAttribute('votes', '1')
++            new_node.setAttribute('id', str(last_node_id))
++            nodes_ptr.addChild(new_node)
++        except Exception, e:
++            log.exception('Error adding node %s to cluster %s'
++                % (node[0], cluster_name))
++            errors.append(str(e))
++
++    if len(errors) == 0:
++        if update_cluster_conf(model) is not True:
++            errors.append(_('Unable to update the cluster configuration on existing nodes'))
++
++    if len(errors) > 0:
++        flash(_('The following errors occurred while creating cluster "%s": %s')
++            % (cluster_name, ', '.join(errors)), 'error')
++        DBSession.rollback()
++        return
++    
++    for i in node_db_obj.values():
++        DBSession.add(i)
++    db_obj.nodes.extend(node_db_obj.values())
++
++    ret = send_batch_to_hosts(node_list, 10, rq.create_cluster_nodes,
++                model, True, True, enable_storage, download_pkgs, reboot_nodes)
++
++    for i in ret.iterkeys():
++        if ret[i].has_key('error'):
++           errors.append(_('Unable to connect to the ricci agent on node %s: %s') % (i, ret[i]['err_msg']))
++        task_id = ret[i]['batch_result'][0]
++        task_obj = Task(batch_id=task_id,
++                        task_type=luci_tasks.TASK_CLUSTER_ADD_NODE,
++                        batch_status=-1,
++                        redirect_url='/clusters/%s/' % cluster_name,
++                        status_msg=_('Creating node "%s" for cluster "%s"') % (i, cluster_name))
++        DBSession.add(task_obj)
++        task_db_obj[i] = task_obj
++
++    try:
++        db_obj.tasks.extend(task_db_obj.values())
++        for i in node_db_obj.iterkeys():
++            node_db_obj[i].tasks = [ task_db_obj[i] ]
++    except Exception, e:
++        log.exception('Error updating luci DB for cluster %s' % cluster_name)
++        flash(_('An error occurred while adding nodes to cluster "%s": %s') % (cluster_name, str(e)), 'error')
++        return
++
++    flash(_('Creating nodes for cluster "%s", this may take up to 30 seconds. Please refresh screen to view created cluster.') % cluster_name, 'info')
++    redirect("/cluster")
+
+commit 114b96605b08bb2dc7316c226b8be7b6734c7d02
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Wed Jul 21 11:42:29 2010 -0400
+
+    Fix typo in last commit
+
+diff --git a/luci/widget_validators/validate_create_cluster_form.py b/luci/widget_validators/validate_create_cluster_form.py
+index 919f9e0..33c4946 100644
+--- a/luci/widget_validators/validate_create_cluster_form.py
++++ b/luci/widget_validators/validate_create_cluster_form.py
+@@ -242,9 +242,9 @@ def validate_node_add_form(model, db_obj, **kw):
+ 
+             last_node_id += 1
+             new_node = ClusterNode()
+-            new_node.setAttribute('name', node[0])
+-            new_node.setAttribute('votes', '1')
+-            new_node.setAttribute('id', str(last_node_id))
++            new_node.addAttribute('name', node[0])
++            new_node.addAttribute('votes', '1')
++            new_node.addAttribute('id', str(last_node_id))
+             nodes_ptr.addChild(new_node)
+         except Exception, e:
+             log.exception('Error adding node %s to cluster %s'
+
+commit 6ecddd25bb3f738854bb5ab5d98393c27d7d4e79
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Wed Jul 21 16:11:52 2010 -0500
+
+    Fixed issues with add nodes
+    
+    - Fixed issue with new node getting a new cluster.conf than the old nodes
+    - Fixed issue using id instead of nodeid in cluster.conf
+    - Still need to tell the node to join after creating it
+
+diff --git a/luci/lib/ricci_queries.py b/luci/lib/ricci_queries.py
+index 7537b96..e0bb625 100644
+--- a/luci/lib/ricci_queries.py
++++ b/luci/lib/ricci_queries.py
+@@ -18,11 +18,15 @@ def addClusterNodeBatch(model,
+ 						reboot_nodes=False):
+ 	batch = list()
+ 
++	ccversion =  (int(model.getClusterConfigVersion()))
+ 	clusterconf = model.exportModelAsString()
+ 	conf = str(clusterconf).replace('<?xml version="1.0"?>', '')
+ 	conf = conf.replace('<?xml version="1.0" ?>', '')
+ 	conf = conf.replace('<? xml version="1.0"?>', '')
+ 	conf = conf.replace('<? xml version="1.0" ?>', '')
++# Need to subtract one from the version because exportModelAsString adds
++# 1 to the version
++	conf = conf.replace('config_version="%d"' % (ccversion + 1) , 'config_version="%d"' % ccversion, 1)
+ 
+ 	batch.append('<module name="rpm">')
+ 	batch.append('<request API_version="1.0">')
+diff --git a/luci/widget_validators/validate_create_cluster_form.py b/luci/widget_validators/validate_create_cluster_form.py
+index 33c4946..8f38a10 100644
+--- a/luci/widget_validators/validate_create_cluster_form.py
++++ b/luci/widget_validators/validate_create_cluster_form.py
+@@ -244,7 +244,7 @@ def validate_node_add_form(model, db_obj, **kw):
+             new_node = ClusterNode()
+             new_node.addAttribute('name', node[0])
+             new_node.addAttribute('votes', '1')
+-            new_node.addAttribute('id', str(last_node_id))
++            new_node.addAttribute('nodeid', str(last_node_id))
+             nodes_ptr.addChild(new_node)
+         except Exception, e:
+             log.exception('Error adding node %s to cluster %s'
+
+commit 36c86e25b1a981423e0b5da4edf7a9e3dc76447f
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Thu Jul 22 15:02:10 2010 -0500
+
+    Set a default to use locally installed packages when adding a node.
+
+diff --git a/luci/templates/add_node.html b/luci/templates/add_node.html
+index 3f302f7..42b0794 100644
+--- a/luci/templates/add_node.html
++++ b/luci/templates/add_node.html
+@@ -35,7 +35,7 @@
+         <input type="radio" class="radio" name="download_pkgs" value="download" />
+         <label class="choice">Download Packages</label>
+         <br />
+-        <input type="radio" class="radio" name="download_pkgs" value="local" />
++        <input type="radio" class="radio" name="download_pkgs" value="local" checked="yes"/>
+         <label class="choice">Use locally installed packages</label>
+     </div>
+     <div class="row">
+
+commit 62cfd07c79b82ea9f9c71cf8d04b46be3e884ae1
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Thu Jul 22 15:18:19 2010 -0500
+
+    Fixed broken look on cluster page when cluster status was not OK.
+
+diff --git a/luci/templates/cluster_list.html b/luci/templates/cluster_list.html
+index 26399e3..5d43ec9 100644
+--- a/luci/templates/cluster_list.html
++++ b/luci/templates/cluster_list.html
+@@ -70,7 +70,7 @@
+ 	    <!--! 2) Cluster is not OK. -->
+ 	    <py:when test="'false'">
+ 	    <td class="main_id">
+-	      <a href="${tg.url(entity_name)}">
++	      <a href="${tg.url('/' + page + '/' + entity_name) + '/'}">
+ 		<span class="entity_fail">${entity_name}</span>
+ 	      </a>
+ 	    </td>
+@@ -83,7 +83,7 @@
+ 	    <!--! 3) Status of the cluster is unknown. -->
+ 	    <py:when test="">
+ 	    <td class="main_id">
+-	      <a href="${tg.url(page + '/' + entity_name)}">
++	      <a href="${tg.url('/' + page + '/' + entity_name) + '/'}">
+ 		<span class="entity_unknown">${entity_name}</span>
+ 	      </a>
+ 	    </td>

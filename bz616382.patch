@@ -1,0 +1,106 @@
+commit ca7723f0dffd3cd41f1d7745e44eb4d5608089fa
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Tue Jul 27 22:54:32 2010 -0400
+
+    Fix rhbz#616382 - luci db error removing a node from a cluster
+
+diff --git a/luci/lib/db_helpers.py b/luci/lib/db_helpers.py
+index f9c83dd..28ce05d 100644
+--- a/luci/lib/db_helpers.py
++++ b/luci/lib/db_helpers.py
+@@ -19,6 +19,7 @@ from luci.lib.ricci_defines import RICCI_BATCH_FAILURES_MAX
+ from luci.lib.ricci_communicator import RicciCommunicator
+ import luci.lib.ricci_queries as rq
+ 
++import transaction
+ import logging
+ log = logging.getLogger(__name__)
+ 
+@@ -51,6 +52,8 @@ def get_node_by_host(node_host):
+     db_obj = None
+     try:
+         db_obj = DBSession.query(Node).filter_by(hostname=node_host).one()
++    except NoResultFound:
++        log.debug('Database node object with host %s not found' % node_host)
+     except Exception, e:
+         log.exception('Database node object with host %s not found' % node_host)
+     return db_obj
+@@ -185,6 +188,7 @@ def create_cluster_obj(cluster_name, node_list):
+                             cluster=[db_obj])
+             DBSession.add(node_obj)
+         DBSession.flush()
++        transaction.commit()
+     except:
+         log.exception("Error adding database objects for cluster: %s")
+         DBSession.rollback()
+@@ -201,6 +205,7 @@ def db_remove_cluster(cluster_name):
+             DBSession.delete(i)
+         DBSession.delete(db_obj)
+         DBSession.flush()
++        transaction.commit()
+     except:
+         log.exception("Error removing cluster %s")
+         DBSession.rollback()
+@@ -211,7 +216,10 @@ def db_remove_cluster_node(cluster_obj, node_name):
+     try:
+         for i in cluster_obj.nodes:
+             if i.node_name == node_name or i.hostname == node_name:
++                cluster_obj.nodes.remove(i)
+                 DBSession.delete(i)
++                DBSession.flush()
++                transaction.commit()
+                 return True
+     except:
+         log.exception('Error removing node "%s" from the database' % node_name)
+@@ -284,4 +292,5 @@ def get_cluster_task_status(cluster_name):
+             continue
+ 
+     DBSession.flush()
++    transaction.commit()
+     return (return_code, task_status)
+diff --git a/luci/widget_validators/validate_create_cluster_form.py b/luci/widget_validators/validate_create_cluster_form.py
+index eeb1bca..18f2338 100644
+--- a/luci/widget_validators/validate_create_cluster_form.py
++++ b/luci/widget_validators/validate_create_cluster_form.py
+@@ -21,6 +21,7 @@ import luci.lib.ricci_queries as rq
+ 
+ import luci.lib.luci_tasks as luci_tasks
+ 
++import transaction
+ import logging
+ log = logging.getLogger(__name__)
+ 
+@@ -153,6 +154,8 @@ def validate_create_cluster_form(self, **kw):
+         flash(_('An error occurred during the creation of cluster "%s" while updating the luci database: %s') % (cluster_name, str(e)), 'error')
+         return
+ 
++    DBSession.flush()
++    transaction.commit()
+     flash(_('Creating the cluster "%s", this may take up to 30 seconds.  Please refresh screen to update status.') % cluster_name, 'info')
+     redirect("/cluster")
+ 
+@@ -193,7 +196,7 @@ def validate_node_add_form(model, db_obj, **kw):
+ 
+         node_db_obj = get_node_by_host(cur_host)
+         if node_db_obj is not None:
+-            errors.append(_('The host "%s" is already a member of cluster %s')
++            errors.append(_('The host "%s" is already a member of cluster "%s"')
+                 % (cur_host, node_db_obj.cluster[0].name))
+ 
+         nodes.append([ cur_host, cur_passwd, cur_port ])
+@@ -226,7 +229,7 @@ def validate_node_add_form(model, db_obj, **kw):
+                     % (node[0], node[2]))
+                 continue
+ 
+-            rc = RicciCommunicator(node[0])
++            rc = RicciCommunicator(node[0], port=int(node[2]), enforce_trust=False)
+             cur_cluster_name = rc.cluster_info()[0]
+             if cur_cluster_name:
+                 errors.append('%s is already a member of a cluster named "%s"'
+@@ -289,4 +292,6 @@ def validate_node_add_form(model, db_obj, **kw):
+         flash(_('An error occurred while adding nodes to cluster "%s": %s') % (cluster_name, str(e)), 'error')
+         return
+ 
++    DBSession.flush()
++    transaction.commit()
+     flash(_('Creating nodes for cluster "%s", this may take up to 30 seconds. Please refresh screen to update status.') % cluster_name, 'info')

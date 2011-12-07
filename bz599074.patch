@@ -1,0 +1,18 @@
+commit 5b2efe1f273db60bd6af9bbacd9f8c8039e31377
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Fri Jun 4 14:34:25 2010 -0500
+
+    Fixed the "Use same password for all nodes" checkbox when creating a cluster
+
+diff --git a/luci/public/js/shared.js b/luci/public/js/shared.js
+index 84fad1e..bf8d918 100644
+--- a/luci/public/js/shared.js
++++ b/luci/public/js/shared.js
+@@ -51,6 +51,7 @@ function add_system_row(form) {
+     var img_elem = $('img', $(new_elem));
+     $(img_elem).attr('onclick', '$(\'#' + new_id + '\').remove()');
+     $('.add_node_button_row', $(form)).before($(new_elem));
++    if (form.allSameCheckBox.checked == true) { allPasswdsSame(form); }
+ }
+ 
+ function input_to_xml(elem) {

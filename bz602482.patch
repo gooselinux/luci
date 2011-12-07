@@ -1,0 +1,61 @@
+commit 33185dbcf43f6889478bcf3012ce487c9d68f7a2
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Wed Jun 9 17:57:22 2010 -0500
+
+    Added a default for multicast network configuration and connected multicast
+      configuration to backend cluster.conf.
+
+diff --git a/luci/templates/configure.html b/luci/templates/configure.html
+index f710187..490fae3 100644
+--- a/luci/templates/configure.html
++++ b/luci/templates/configure.html
+@@ -90,18 +90,21 @@
+ 	  <form action="${tg.url(configure_cmd)}" method="post">
+ 	    <input type="hidden" name="page" value="Network"/>
+ 	    <h2>Network Configuration</h2>
+-	       <div class="row"><input name="multicast" value="broadcast" class="radio" type="radio"/>
+-	         <label class="choice">Use broadcast (EXPERIMENTAL)</label>
+-	         <br />
+-	         <input name="multicast" value="multicast" class="radio" type="radio"/>
+-	         <label class="choice">Let cluster choose the multicast address</label>
+-	       	 <br />
+-	         <input name="multicast" value="multicast_manual" class="radio" type="radio"/>
+-	         <label class="choice">Specify the multicast address manually</label>
+-	       	 <br />	         
+-	         <label class=" indent">Multicast address</label>
+-	         <input type="text" class="text" name="mcast_address"/>
+-	       </div>    
++	    <div class="row">
++	      <input name="multicast" value="multicast" class="radio" type="radio"
++	        py:attrs="cluster_data and cluster_data.getMcastAddr() == None and {'checked': 'checked'} or {}"/>
++	      <label class="choice">Let cluster choose the multicast address</label>
++	      <br />
++	      <input name="multicast" value="multicast_manual" class="radio" type="radio"
++	        py:attrs="cluster_data and cluster_data.getMcastAddr() != None and {'checked': 'checked'} or {}"/>
++	      <label class="choice">Specify the multicast address manually</label>
++	      <br />	         
++	      <label class=" indent">Multicast address</label>
++	      <input type="text" class="text" name="mcast_address" value="${cluster_data and cluster_data.getMcastAddr()}"/>
++	      <br />
++	      <input name="multicast" value="broadcast" class="radio" type="radio" disabled="true"/>
++	      <label class="choice">Use broadcast (EXPERIMENTAL)</label>
++	    </div>    
+ 	    <div class="row"><div id="button"><button class="button small silver">Show Advanced Properties</button></div>
+ 	    </div>
+ 
+diff --git a/luci/widget_validators/validate_cluster_prop.py b/luci/widget_validators/validate_cluster_prop.py
+index a4086e4..f6c403d 100644
+--- a/luci/widget_validators/validate_cluster_prop.py
++++ b/luci/widget_validators/validate_cluster_prop.py
+@@ -397,6 +397,11 @@ def validate_cluster_config_form(model, **kw):
+         multicast = kw.get('multicast')
+         mcast_addr = kw.get('mcast_address')
+ 
++	if multicast == "multicast":
++	    model.del_cluster_multicast()
++	elif multicast == "multicast_manual":
++	    model.set_cluster_multicast(mcast_addr, None)
++
+         totem = model.getTotemPtr()
+         if totem is None:
+             totem = model.addTotemPtr()

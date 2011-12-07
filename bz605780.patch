@@ -1,0 +1,369 @@
+commit c6098e59ec93b8ba4ba73046606bb9e3d37b2d87
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Thu Jul 1 11:27:49 2010 -0500
+
+    Moved the QDisk configuration to the configuration page (bz#605780)
+
+diff --git a/luci/controllers/cluster.py b/luci/controllers/cluster.py
+index 5ac310d..7a3e821 100644
+--- a/luci/controllers/cluster.py
++++ b/luci/controllers/cluster.py
+@@ -366,37 +366,6 @@ class IndividualClusterController(BaseController):
+         else:
+             redirect(tmpl_context.cluster_url + '/' + cur_list[0])
+ 
+-    @expose("luci.templates.qdisk")
+-    def qdisk(self, *args):
+-        qdisk_cmd = '/cluster/%s/qdisk_cmd' % self.name
+-        return dict(page='nodes', base_url = '/cluster/' + self.name + '/qdisk', qdisk_cmd = qdisk_cmd)
+-
+-    @expose("luci.templates.qdisk")
+-    def qdisk_cmd(self, command=None, **kw):
+-        qdisk_cmd = '/cluster/%s/qdisk_cmd' % self.name
+-
+-        if not self.model:
+-            flash(_('Unable to contact any nodes in this cluster'),
+-                status="error")
+-            return dict(use_referrer=False, page='nodes', base_url = '/cluster/' + self.name + '/qdisk', qdisk_cmd=qdisk_cmd)
+-
+-        vret = vcp.validate_qdisk_prop_form(self.model, **kw)
+-        if vret[0] is True:
+-            log.info('User "%s" updated the quorum disk properties for cluster "%s"'
+-                        % (self.username, self.name))
+-            flash(_('Updating quorum disk settings'))
+-            msgs = vret[1].get('flash')
+-            if msgs:
+-                flash(', '.join(msgs))
+-
+-            self.model.setModified(True)
+-            rh.update_cluster_conf(self.model)
+-        else:
+-            msgs = vret[1].get('errors')
+-            if msgs and len(msgs) > 0:
+-                flash(', '.join(msgs), status="error")
+-        return dict(use_referrer=False, page='nodes', base_url = '/cluster/' + self.name + '/qdisk', qdisk_cmd=qdisk_cmd)
+-
+     @expose("luci.templates.failover")
+     def failovers(self, *args):
+         failovers_cmd = '/cluster/%s/failovers_cmd' % self.name
+@@ -588,7 +557,11 @@ class IndividualClusterController(BaseController):
+                 status="error")
+             redirect(tmpl_context.cluster_url)
+ 
+-        vret = vcp.validate_cluster_config_form(self.model, **kw)
++        if kw['page'] == "QDisk":
++            vret = vcp.validate_qdisk_prop_form(self.model, **kw)
++        else:
++            vret = vcp.validate_cluster_config_form(self.model, **kw)
++
+         if vret[0] is True:
+             log.info('User "%s" updated the cluster properties for cluster "%s"'
+                     % (self.username, self.name))
+diff --git a/luci/templates/configure.html b/luci/templates/configure.html
+index eda6592..a70eaeb 100644
+--- a/luci/templates/configure.html
++++ b/luci/templates/configure.html
+@@ -19,6 +19,7 @@
+     <div style="clear:both;"></div>
+ 
+     <script src="/js/jquery.cookie.js" type="text/javascript"/>
++    <script type="text/javascript" src="/js/qdisk.js"></script>
+     <!--! OVERVIEW SECTION. -->
+     <div id="overview">
+       <script type="text/javascript">
+@@ -52,6 +53,7 @@
+ 	  <li><a href="#tabs-1">General Properties</a></li>
+ 	  <li><a href="#tabs-2">Fence Daemon Properties</a></li>
+ 	  <li><a href="#tabs-3">Network Configuration</a></li>
++	  <li><a href="#tabs-4">QDisk Configuration</a></li>
+ 	</ul>
+ 	<div id="tabs-1">
+ 	  <form action="${tg.url(configure_cmd)}" method="post">
+@@ -119,6 +121,125 @@
+         </div>
+       </form>
+ 	</div>
++	<div id="tabs-4" py:with="quorumd_ptr = cluster_data and cluster_data.quorumd_ptr">
++	  <form action="${tg.url(configure_cmd)}" method="post">
++	    <input type="hidden" name="page" value="QDisk" />
++	    <input type="hidden" name="command" value="Update" />
++	    <h2>Quorum Disk Configuration</h2>
++	       <div class="row">
++	          <input name="quorumd" type="radio" class="radio" value="false" 
++	            onclick="disableChildrenInput('qdisk_config')"
++	            py:attrs="not quorumd_ptr and {'checked': ''} or {}"/><label class="choice">Do not use a Quorum Disk</label>
++	          <br />
++	          <input name="quorumd" type="radio" class="radio" value="true"
++	            onclick="enableChildrenInput('qdisk_config')"
++	            py:attrs="quorumd_ptr and {'checked': ''} or {}"/><label class="choice">Use a Quorum Disk</label>
++	          </div>
++
++         <div id="qdisk_config">
++	      <div class="row"><label>Interval</label>
++	        <input name="interval" type="text" class="text"
++	            py:attrs="(quorumd_ptr and {'value': quorumd_ptr.getAttribute('interval')or ''}) or {'disabled':'disabled'}" />
++	      </div>
++	      <div class="row"><label>Votes</label>
++	        <input name="votes" type="text" class="text"
++	            py:attrs="(quorumd_ptr and {'value': quorumd_ptr.getAttribute('votes') or ''}) or {'disabled':'disabled'}" />
++	      </div>
++	      <div class="row"><label>TKO</label>
++	        <input name="tko" type="text" class="text"
++	            py:attrs="(quorumd_ptr and {'value': quorumd_ptr.getAttribute('tko') or ''}) or {'disabled':'disabled'}" />
++	      </div>
++	      <div class="row"><label>Minimum Score</label>
++	        <input name="min_score" type="text" class="text"
++	            py:attrs="(quorumd_ptr and {'value': quorumd_ptr.getAttribute('min_score') or ''}) or {'disabled':'disabled'}" />
++	      </div>
++	      <fieldset>
++	      <legend>Specify physical device</legend>
++	      <div class="row"><input name="labeldev" type="radio" class="radio"
++	                py:attrs="(quorumd_ptr and quorumd_ptr.getAttribute('label')) and {'checked': ''} or {'disabled':'disabled'}" />
++	                <label class="choice">By device label</label>
++	                <br />
++	            <input name="label" type="text" class="text indent subrow"
++	                py:attrs="(quorumd_ptr and {'value': quorumd_ptr.getAttribute('label') or ''}) or {'disabled':'disabled'}" />
++	        </div>
++	      <div class="row"><input name="labeldev" type="radio" class="radio"
++	                py:attrs="(quorumd_ptr and quorumd_ptr.getAttribute('device')) and {'checked': ''} or {'disabled':'disabled'}"/>
++	                <label class="choice">By filesystem path to device (deprecated)</label>
++	                <br />
++	           <input name="device" type="text" class="text indent subrow"
++	           py:attrs="(quorumd_ptr and {'value': quorumd_ptr.getAttribute('device') or ''}) or {'disabled':'disabled'}" />
++          </div>
++	      </fieldset>
++
++	      <fieldset>
++	      <legend>Heuristics</legend>
++	    <table id="qdisk_heuristics"
++	        py:with="num_heuristics = quorumd_ptr and quorumd_ptr.getHeuristicsLen() or 0">
++	      <input type="hidden" id="num_heuristics" name="num_heuristics"
++	       value="${num_heuristics}" />
++	      <tr>
++            <td>Path to Program</td>
++            <td>Interval</td>
++            <td>Score</td>
++            <td>TKO</td>
++            <td></td>
++          </tr>
++
++          <py:choose test="num_heuristics">
++          <py:when test="0">
++	      <tr id="qdisk_heuristic0" class="qdisk_heuristic">
++            <td>
++                <input type="text" class="text" name="heuristic0:hprog"/>
++            </td>
++            <td>
++                <input type="text" class="text" name="heuristic0:hinterval" size="5"/>
++            </td>
++            <td>
++                <input type="text" class="text" name="heuristic0:hscore" size="5"/>
++            </td>
++            <td>
++                <input type="text" class="text" name="heuristic0:htko" size="5"/>
++            </td>
++            <td>
++                <img src="/images/delete-grey.png" onclick="remove_qdisk_heuristic('qdisk_heuristic0')" style="cursor:pointer;" />
++            </td>
++	      </tr>
++	      </py:when>
++	      <py:otherwise>
++           <tr py:for="(hnum, hobj) in enumerate(quorumd_ptr.getChildren())"
++               class="qdisk_heuristic" id="qdisk_heuristic${hnum}">
++            <td>
++                <input type="text" class="text" name="heuristic${hnum}:hprog"
++                 py:attrs="{'value': hobj.getAttribute('program') }"/>
++            </td>
++            <td>
++                <input type="text" class="text" name="heuristic${hnum}:hinterval" size="5"
++                 py:attrs="{'value': hobj.getAttribute('interval') }"/>
++            </td>
++            <td>
++                <input type="text" class="text" name="heuristic${hnum}:hscore" size="5"
++                 py:attrs="{'value': hobj.getAttribute('score') }"/>
++            </td>
++            <td>
++                <input type="text" class="text" name="heuristic${hnum}:htko" size="5"
++                 py:attrs="{'value': hobj.getAttribute('tko') }"/>
++            </td>
++            <td>
++                <img src="/images/delete-grey.png" onclick="remove_qdisk_heuristic('qdisk_heuristic${hnum}')" style="cursor:pointer;" />
++            </td>
++           </tr>
++	      </py:otherwise>
++	      </py:choose>
++	    </table>
++	      <tr>
++	         <td><input type="button" class="button small silver" value="Add Another Heuristic" onclick="add_qdisk_heuristic()" /></td>
++	      </tr>   
++	   </fieldset>
++	   </div>
++	    <div class="row"><input type="submit" class="button formsubmit blue" value="Apply"/>
++        </div>
++	  </form>
++	</div>
+ 
+       </div>
+     </div>
+diff --git a/luci/templates/qdisk.html b/luci/templates/qdisk.html
+deleted file mode 100644
+index 4f685d9..0000000
+--- a/luci/templates/qdisk.html
++++ /dev/null
+@@ -1,144 +0,0 @@
+-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+-                    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+-<html xmlns="http://www.w3.org/1999/xhtml"
+-  xmlns:py="http://genshi.edgewall.org/"
+-  xmlns:xi="http://www.w3.org/2001/XInclude">
+-
+-<xi:include href="master.html" />
+-
+-<head>
+-  <meta content="text/html; charset=UTF-8" http-equiv="content-type" py:replace="''"/>
+-  <title>${title()}</title>
+-</head>
+-
+-<body py:with="cluster_data = tmpl_context.cluster_data;
+-               cluster_status = tmpl_context.cluster_status;
+-               form_utils = app_globals.form_utils">
+-
+-  <script type="text/javascript" src="/js/qdisk.js"></script>
+-
+-  <div class="sectionblock">  
+-    <xi:include href="submenu.html"/>
+-    <div style="clear:both;"></div>
+-  <div id="tabs" py:with="quorumd_ptr = cluster_data and cluster_data.quorumd_ptr">
+-	  <form id="qdisk_form" action="${tg.url(qdisk_cmd)}" method="post">
+-	    <input type="hidden" name="page" value="Quorum Disk" />
+-	    <input type="hidden" name="command" value="Update" />
+-	    <h2>Quorum Disk Configuration</h2>
+-	       <div class="row">
+-	          <input name="quorumd" type="radio" class="radio" value="false" 
+-	            onclick="disableChildrenInput('qdisk_config')"
+-	            py:attrs="not quorumd_ptr and {'checked': ''} or {}"/><label class="choice">Do not use a Quorum Disk</label>
+-	          <br />
+-	          <input name="quorumd" type="radio" class="radio" value="true"
+-	            onclick="enableChildrenInput('qdisk_config')"
+-	            py:attrs="quorumd_ptr and {'checked': ''} or {}"/><label class="choice">Use a Quorum Disk</label>
+-	          </div>
+-
+-         <div id="qdisk_config">
+-	      <div class="row"><label>Interval</label>
+-	        <input name="interval" type="text" class="text"
+-	            py:attrs="(quorumd_ptr and {'value': quorumd_ptr.getAttribute('interval')or ''}) or {'disabled':'disabled'}" />
+-	      </div>
+-	      <div class="row"><label>Votes</label>
+-	        <input name="votes" type="text" class="text"
+-	            py:attrs="(quorumd_ptr and {'value': quorumd_ptr.getAttribute('votes') or ''}) or {'disabled':'disabled'}" />
+-	      </div>
+-	      <div class="row"><label>TKO</label>
+-	        <input name="tko" type="text" class="text"
+-	            py:attrs="(quorumd_ptr and {'value': quorumd_ptr.getAttribute('tko') or ''}) or {'disabled':'disabled'}" />
+-	      </div>
+-	      <div class="row"><label>Minimum Score</label>
+-	        <input name="min_score" type="text" class="text"
+-	            py:attrs="(quorumd_ptr and {'value': quorumd_ptr.getAttribute('min_score') or ''}) or {'disabled':'disabled'}" />
+-	      </div>
+-	      <fieldset>
+-	      <legend>Specify physical device</legend>
+-	      <div class="row"><input name="labeldev" type="radio" class="radio"
+-	                py:attrs="(quorumd_ptr and quorumd_ptr.getAttribute('label')) and {'checked': ''} or {'disabled':'disabled'}" />
+-	                <label class="choice">By device label</label>
+-	                <br />
+-	            <input name="label" type="text" class="text indent subrow"
+-	                py:attrs="(quorumd_ptr and {'value': quorumd_ptr.getAttribute('label') or ''}) or {'disabled':'disabled'}" />
+-	        </div>
+-	      <div class="row"><input name="labeldev" type="radio" class="radio"
+-	                py:attrs="(quorumd_ptr and quorumd_ptr.getAttribute('device')) and {'checked': ''} or {'disabled':'disabled'}"/>
+-	                <label class="choice">By filesystem path to device (deprecated)</label>
+-	                <br />
+-	           <input name="device" type="text" class="text indent subrow"
+-	           py:attrs="(quorumd_ptr and {'value': quorumd_ptr.getAttribute('device') or ''}) or {'disabled':'disabled'}" />
+-          </div>
+-	      </fieldset>
+-
+-	      <fieldset>
+-	      <legend>Heuristics</legend>
+-	    <table id="qdisk_heuristics"
+-	        py:with="num_heuristics = quorumd_ptr and quorumd_ptr.getHeuristicsLen() or 0">
+-	      <input type="hidden" id="num_heuristics" name="num_heuristics"
+-	       value="${num_heuristics}" />
+-	      <tr>
+-            <td>Path to Program</td>
+-            <td>Interval</td>
+-            <td>Score</td>
+-            <td>TKO</td>
+-            <td></td>
+-          </tr>
+-
+-          <py:choose test="num_heuristics">
+-          <py:when test="0">
+-	      <tr id="qdisk_heuristic0" class="qdisk_heuristic">
+-            <td>
+-                <input type="text" class="text" name="heuristic0:hprog"/>
+-            </td>
+-            <td>
+-                <input type="text" class="text" name="heuristic0:hinterval" size="5"/>
+-            </td>
+-            <td>
+-                <input type="text" class="text" name="heuristic0:hscore" size="5"/>
+-            </td>
+-            <td>
+-                <input type="text" class="text" name="heuristic0:htko" size="5"/>
+-            </td>
+-            <td>
+-                <img src="/images/delete-grey.png" onclick="remove_qdisk_heuristic('qdisk_heuristic0')" style="cursor:pointer;" />
+-            </td>
+-	      </tr>
+-	      </py:when>
+-	      <py:otherwise>
+-           <tr py:for="(hnum, hobj) in enumerate(quorumd_ptr.getChildren())"
+-               class="qdisk_heuristic" id="qdisk_heuristic${hnum}">
+-            <td>
+-                <input type="text" class="text" name="heuristic${hnum}:hprog"
+-                 py:attrs="{'value': hobj.getAttribute('program') }"/>
+-            </td>
+-            <td>
+-                <input type="text" class="text" name="heuristic${hnum}:hinterval" size="5"
+-                 py:attrs="{'value': hobj.getAttribute('interval') }"/>
+-            </td>
+-            <td>
+-                <input type="text" class="text" name="heuristic${hnum}:hscore" size="5"
+-                 py:attrs="{'value': hobj.getAttribute('score') }"/>
+-            </td>
+-            <td>
+-                <input type="text" class="text" name="heuristic${hnum}:htko" size="5"
+-                 py:attrs="{'value': hobj.getAttribute('tko') }"/>
+-            </td>
+-            <td>
+-                <img src="/images/delete-grey.png" onclick="remove_qdisk_heuristic('qdisk_heuristic${hnum}')" style="cursor:pointer;" />
+-            </td>
+-           </tr>
+-	      </py:otherwise>
+-	      </py:choose>
+-	    </table>
+-	      <tr>
+-	         <td><input type="button" class="button small silver" value="Add Another Heuristic" onclick="add_qdisk_heuristic()" /></td>
+-	      </tr>   
+-	   </fieldset>
+-	   </div>
+-	    <div class="row"><input type="submit" class="button formsubmit blue" value="Apply"/>
+-        </div>
+-	  </form>
+-  </div>
+-  </div>
+-</body>
+-</html>
+diff --git a/luci/templates/submenu.html b/luci/templates/submenu.html
+index 4d8ae27..36d4899 100644
+--- a/luci/templates/submenu.html
++++ b/luci/templates/submenu.html
+@@ -9,7 +9,6 @@
+         <li><a href="${tg.url(tmpl_context.cluster_url + 'resources')}" class="${('', 'active')[base_url.endswith('/resources')]}">Resources</a></li>
+         <li><a href="${tg.url(tmpl_context.cluster_url + 'failovers')}" class="${('', 'active')[base_url.endswith('/failovers')]}">Failover Domains</a></li>
+         <li><a href="${tg.url(tmpl_context.cluster_url +'fences')}" class="${('', 'active')[base_url.endswith('/fences')]}">Fence Devices</a></li>
+-        <li><a href="${tg.url(tmpl_context.cluster_url +'qdisk')}" class="${('', 'active')[base_url.endswith('/qdisk')]}">QDisk</a></li>
+         <li><a href="${tg.url(tmpl_context.cluster_url +'configure')}" class="${('', 'active')[base_url.endswith('/configure')]}">Configure</a></li>
+     </ul>
+ </py:if>

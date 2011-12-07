@@ -1,0 +1,19 @@
+commit 65f608d23bb211a67f6be1b39f8967f36a9d2d93
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Mon Jul 26 21:58:16 2010 -0400
+
+    Additional fix for rhbz#615911: fence_xvm (shown as "fence_virt (multicast mode)") should be listed among the fence types for cluster3 clusters
+
+diff --git a/luci/templates/fence_devices.html b/luci/templates/fence_devices.html
+index c774259..98ab861 100644
+--- a/luci/templates/fence_devices.html
++++ b/luci/templates/fence_devices.html
+@@ -2686,7 +2686,7 @@ ${fence_unknown(None,0)}
+ 			<py:choose test="tmpl_context.cluster_version">
+ 				<py:when test="3">
+ 					<option name="fence_virt" value="fence_virt">Fence virt (Tech Preview)</option>
+-					<!--					<option name="fence_xvm" value="fence_xvm">Fence virt (Multicast Mode)</option> -->
++					<option name="fence_xvm" value="fence_xvm">Fence virt (Multicast Mode)</option>
+ 				</py:when>
+ 			</py:choose>
+ 			<option py:if="tmpl_context.cluster_version == 2" name="fence_xvm" value="fence_xvm">Fence xvm</option>

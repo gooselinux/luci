@@ -1,0 +1,19 @@
+commit 7918c2c15585f991295b4f8f1d874eaf43d3442d
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Mon Jul 26 15:17:31 2010 -0400
+
+    Fix rhbz#616230 - Clicking on the join button doesn't work on nodes page
+
+diff --git a/luci/templates/node.html b/luci/templates/node.html
+index 19834c6..66e38bd 100644
+--- a/luci/templates/node.html
++++ b/luci/templates/node.html
+@@ -172,7 +172,7 @@
+       <h3 py:content="name"/>
+       <div id="details_header_buttons">
+         <a href="${tg.url('nodes_cmd?command=Reboot' + '&amp;name=' + name)}" id="dh_reboot" title="reboot"><span class="hide">reboot</span></a>
+-        <a href="${tg.url('nodes_cmd?command=Join'  + '&amp;name=' + name)}" id="dh_join" title="join"><span class="hide">join</span></a>
++        <a href="${tg.url('nodes_cmd?command=Join+Cluster'  + '&amp;name=' + name)}" id="dh_join" title="join"><span class="hide">join</span></a>
+         <a href="${tg.url('nodes_cmd?command=Leave' + '&amp;name=' + name)}" id="dh_leave" title="leave cluster"><span class="hide">leave cluster</span></a>
+         <a href="${tg.url('nodes_cmd?command=Delete' + '&amp;name=' + name)}" id="dh_delete" title="delete"><span class="hide">delete</span></a>
+       </div>

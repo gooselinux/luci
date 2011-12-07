@@ -1,0 +1,57 @@
+commit 0ee83efd610a0bfb84e6030dd992fc8553ccc894
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Fri Jun 18 13:52:28 2010 -0500
+
+    Fixed display on fence page so Node names show up properly (bz#600060)
+    
+    - Also removed Primary/Secondary display since this will soon be
+      phased out
+
+diff --git a/luci/public/css/fence.css b/luci/public/css/fence.css
+index fec8402..e609e30 100644
+--- a/luci/public/css/fence.css
++++ b/luci/public/css/fence.css
+@@ -45,7 +45,6 @@ th.fence_tlist_ip {
+ }
+ 
+ th.fence_tnodes_name {
+-  width: 20%;
+   min-width: 20%;
+ }
+ 
+@@ -83,4 +82,4 @@ th.fence_tnodes_level {
+ 
+ #fence_form_area {
+   min-height: 6em;
+-}
+\ No newline at end of file
++}
+diff --git a/luci/templates/fence.html b/luci/templates/fence.html
+index 55345b7..ac2264b 100644
+--- a/luci/templates/fence.html
++++ b/luci/templates/fence.html
+@@ -126,10 +126,9 @@
+         <table id="fence_tnodes"  class="detailstable">
+           <thead>
+             <tr class="grid_row">
+-              <th class="icon"></th>
+-              <th class="fence_tnodes_name"></th>
+-              <th class="fence_tnodes_status">status</th>
+-              <th class="fence_tnodes_level">level</th>
++              <th class="icon">!</th>
++              <th class="fence_tnodes_name">Node Name</th>
++              <th class="fence_tnodes_status">Status</th>
+             </tr>
+           </thead>
+           <tbody>
+@@ -160,10 +159,6 @@
+               <td class="fence_tnodes_status">${node_dict.get('msg', _('Status uknown'))}</td>
+               </py:when>
+               </py:choose>
+-              <py:choose test="'0'">
+-              <td py:when="1" class="fence_tnodes_level">${_('Primary Fence')}</td>
+-              <td py:when="2" class="fence_tnodes_level">${_('Secondary Fence')}</td>
+-              </py:choose>
+             </tr>
+           </tbody>
+         </table>

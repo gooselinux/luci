@@ -1,0 +1,98 @@
+commit 3a501a9fcbc3f98a2cb5eb82f9b8c61202d4a766
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Tue Jul 13 11:48:19 2010 -0400
+
+    Update the information on the "about" page
+
+diff --git a/luci/templates/about.html b/luci/templates/about.html
+index a81344e..0a6ff59 100644
+--- a/luci/templates/about.html
++++ b/luci/templates/about.html
+@@ -21,10 +21,8 @@
+   "luci". One luci server can communicate with many multiple ricci agents
+   installed on systems.  When a system is added to a luci server to be
+   administered, authentication is done once. No authentication is necessary from
+-  then on (unless the certificate used is revoked by a CA, but in fact, CA
+-  integration is not complete in this version of conga). Through the UI provided
+-  by luci, users can configure and administer cluster behavior on
+-  remote systems. Communication between luci and ricci is done via XML.</p>
++  then on. Through the UI provided by luci, users can configure and
++  administer cluster behavior on remote systems. Communication between luci and ricci is done via XML over SSL.</p>
+ 
+   <h2>Luci Description</h2>
+ 
+@@ -39,19 +37,13 @@
+   easier upgrade and testing path.</p>
+ 
+  <h2>Legal</h2>
+-         The
+-        <span>
+-            <a href="http://www.sourceware.org/cluster/conga">
+-                Conga Cluster and Storage Management System</a>
+-        </span>
++        <a href="http://www.sourceware.org/cluster/conga">luci</a>
+         is Copyright <acronym title="Copyright">&copy;</acronym> 2006&#8211;2010
+         <a href="http://www.redhat.com/">Red Hat, Inc.</a>
+-
+ 		<p>
+         Distributed under the
+             <a href="http://creativecommons.org/licenses/GPL/2.0/">GNU GPL v2 license</a>.
+ 		</p>
+- 
+  </div>
+ 
+  </body>
+
+commit 46a36548c141e49ac1b9027808fcac8818f05ce7
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Mon Jul 12 15:06:08 2010 -0400
+
+    Change remaining instances of "cluster management" to "high availability management"
+
+diff --git a/config/cacert.config b/config/cacert.config
+index 1f2238a..e9b04a8 100644
+--- a/config/cacert.config
++++ b/config/cacert.config
+@@ -9,7 +9,7 @@ ST                     = State or Province
+ L                      = Luci
+ O                      = Luci
+ OU                     = Luci
+-CN                     = luci cluster management server
++CN                     = luci high availability management server
+ emailAddress           = luci@localhost
+ 
+ [ req_attributes ]
+diff --git a/init.d/luci b/init.d/luci
+index 4b2ea82..779c23c 100755
+--- a/init.d/luci
++++ b/init.d/luci
+@@ -1,6 +1,6 @@
+ #!/bin/bash
+ #
+-# luci - Luci cluster management application init script
++# luci - Luci high availability management application init script
+ #
+ # chkconfig: - 25 78
+ # description: Starts and stops luci
+@@ -13,7 +13,7 @@
+ # Default-Start:
+ # Default-Stop:
+ # Short-Description:    Starts and stops luci
+-# Description:      Starts and stops the luci cluster management application
++# Description:      Starts and stops the luci high availability management application
+ ### END INIT INFO
+ 
+ PATH="/bin:/usr/bin:/sbin:/usr/sbin:/usr/sbin"
+diff --git a/luci/templates/title.html b/luci/templates/title.html
+index 359e872..a174516 100644
+--- a/luci/templates/title.html
++++ b/luci/templates/title.html
+@@ -2,7 +2,7 @@
+       xmlns:xi="http://www.w3.org/2001/XInclude"
+       py:strip="">
+ <py:def function="title(title_list=tmpl_context.title_list)">
+-Cluster Management
++High Availability Management
+ <py:if test="len(title_list) != 0"
+  py:replace="' | ' + ' &gt; '.join(title_list)">
+ </py:if>

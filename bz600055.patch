@@ -1,0 +1,196 @@
+commit c17946eba5d08834a857b7936620d60fa978db0b
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Mon Jul 26 15:48:59 2010 -0500
+
+    Show clusters immediately after they have been added to luci
+
+diff --git a/luci/templates/cluster_list.html b/luci/templates/cluster_list.html
+index 5d43ec9..5f9ed0c 100644
+--- a/luci/templates/cluster_list.html
++++ b/luci/templates/cluster_list.html
+@@ -62,10 +62,10 @@
+ 	      </a>
+ 	    </td>
+ 	    <td class="cluster_tlist_status">Quorate</td>
+-        <td class="cluster_tlist_votes">${sum(map(lambda n: int(n.getVotes()), cluster_data['model'].getNodes()))}</td>
+-        <td class="cluster_tlist_votes">${cluster_data['status'].votes}</td>
+-        <td class="cluster_tlist_quorum">${cluster_data['status'].minQuorum}</td>
+-        <td class="cluster_tlist_votes">${cluster_data['status'].nodesClustered}</td>
++	    <td class="cluster_tlist_votes">${sum(map(lambda n: int(n.getVotes()), cluster_data['model'].getNodes()))}</td>
++	    <td class="cluster_tlist_votes">${cluster_data['status'].votes}</td>
++	    <td class="cluster_tlist_quorum">${cluster_data['status'].minQuorum}</td>
++	    <td class="cluster_tlist_votes">${cluster_data['status'].nodesClustered}</td>
+ 	    </py:when>
+ 	    <!--! 2) Cluster is not OK. -->
+ 	    <py:when test="'false'">
+@@ -75,10 +75,10 @@
+ 	      </a>
+ 	    </td>
+ 	    <td class="cluster_tlist_status">Not Quorate</td>
+-        <td class="cluster_tlist_votes">${sum(map(lambda n: int(n.getVotes()), cluster_data['model'].getNodes()))}</td>
+-        <td class="cluster_tlist_votes">${cluster_data['status'].votes}</td>
+-        <td class="cluster_tlist_quorum">${cluster_data['status'].minQuorum}</td>
+-        <td class="cluster_tlist_votes">${cluster_data['status'].nodesClustered}</td>
++	    <td class="cluster_tlist_votes">${sum(map(lambda n: int(n.getVotes()), cluster_data['model'].getNodes()))}</td>
++	    <td class="cluster_tlist_votes">${cluster_data['status'].votes}</td>
++	    <td class="cluster_tlist_quorum">${cluster_data['status'].minQuorum}</td>
++	    <td class="cluster_tlist_votes">${cluster_data['status'].nodesClustered}</td>
+ 	    </py:when>
+ 	    <!--! 3) Status of the cluster is unknown. -->
+ 	    <py:when test="">
+@@ -88,14 +88,27 @@
+ 	      </a>
+ 	    </td>
+ 	    <td class="cluster_tlist_status">Status unknown</td>
+-        <td class="cluster_tlist_votes">-</td>
+-        <td class="cluster_tlist_votes">-</td>
+-        <td class="cluster_tlist_quorum">-</td>
+-        <td class="cluster_tlist_votes">-</td>
++	    <td class="cluster_tlist_votes">-</td>
++	    <td class="cluster_tlist_votes">-</td>
++	    <td class="cluster_tlist_quorum">-</td>
++	    <td class="cluster_tlist_votes">-</td>
+ 	    </py:when>
+ 	    </py:choose>
+-        </div>
+-        </tr>
++	  </div>
++	  <div py:if="not hasattr(cluster_data['status'],'quorate')">
++	    <td class="checkbox"><input type="checkbox" name="${identifier}"/></td>
++	    <td class="main_id">
++	      <a href="${tg.url('/' + page + '/' + entity_name) + '/'}">
++		<span class="entity_unknown">${entity_name}</span>
++	      </a>
++	    </td>
++	    <td class="cluster_tlist_status">Currently Loading</td>
++	    <td class="cluster_tlist_votes">-</td>
++	    <td class="cluster_tlist_votes">-</td>
++	    <td class="cluster_tlist_quorum">-</td>
++	    <td class="cluster_tlist_votes">-</td>
++	  </div>
++	</tr>
+       </tbody>
+     </table>
+   </div>
+diff --git a/luci/widget_validators/validate_create_cluster_form.py b/luci/widget_validators/validate_create_cluster_form.py
+index a1590a2..3c5043d 100644
+--- a/luci/widget_validators/validate_create_cluster_form.py
++++ b/luci/widget_validators/validate_create_cluster_form.py
+@@ -153,7 +153,7 @@ def validate_create_cluster_form(self, **kw):
+         flash(_('An error occurred during the creation of cluster "%s" while updating the luci database: %s') % (cluster_name, str(e)), 'error')
+         return
+ 
+-    flash(_('Creating the cluster "%s", this may take up to 30 seconds.  Please refresh screen to view created cluster.') % cluster_name, 'info')
++    flash(_('Creating the cluster "%s", this may take up to 30 seconds.  Please refresh screen to update status.') % cluster_name, 'info')
+     redirect("/cluster")
+ 
+ # TODO: refactor to share common bits with the validation for
+
+commit 621964e959485933d20de57b9f9ddc81388797f9
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Mon Jul 26 17:00:16 2010 -0500
+
+    Fixed status display during addition and removal of nodes.
+
+diff --git a/luci/controllers/cluster.py b/luci/controllers/cluster.py
+index 1194f28..94445e9 100644
+--- a/luci/controllers/cluster.py
++++ b/luci/controllers/cluster.py
+@@ -109,7 +109,7 @@ class IndividualClusterController(BaseController):
+     def add_nodes_cmd(self, command=None, **kw):
+         db = get_cluster_db_obj(self.name)
+         vret = validate_node_add_form(self.model, db, **kw)
+-        return dict(use_referrer=False, page='nodes', name=self.nodename, base_url='/nodes', nodes=db.nodes)
++        redirect('%s%s' % (tmpl_context.cluster_url, 'nodes'))
+ 
+     @expose("luci.templates.node")
+     def nodes_fence_cmd(self, command=None, **kw):
+@@ -677,7 +677,8 @@ class IndividualNodeController(BaseController):
+ 
+     @expose("luci.templates.node")
+     def default(self):
+-        return dict(page='nodes', name=self.nodename, base_url='/nodes')
++        db = get_cluster_db_obj(self.name)
++        return dict(page='nodes', name=self.nodename, base_url='/nodes', nodes=db.nodes)
+ 
+     @expose()
+     def lookup(self, nodename, *args):
+diff --git a/luci/templates/node.html b/luci/templates/node.html
+index b1b748f..c200430 100644
+--- a/luci/templates/node.html
++++ b/luci/templates/node.html
+@@ -72,10 +72,15 @@
+             py:attrs="entity_name==name and {'class': 'chosen'} or (not i%2 and {'class': 'even'} or None)"
+             py:with="identifier = entity_name;
+                      nodeobj = cluster_data.getNodeByName(entity_name);
++		     is_clustered = node_data['clustered'];
+                      nodedbobj = db_helpers.get_cluster_node(tmpl_context.cluster_name, entity_name);">
+           <td class="checkbox"><input type="checkbox" name="${identifier}"/></td>
+           <!--! Branch according to the status of the node. -->
+-          <py:choose test="node_data['clustered']">
++	  <?python
++	    if nodeobj == None:
++	      is_clustered = "Removing"
++	  ?>
++          <py:choose test="is_clustered">
+           <!--! 1) Node is active. -->
+           <py:when test="'true'">
+           <td class="icon"></td>
+@@ -116,6 +121,19 @@
+           <td class="node_tlist_votes">${nodeobj and nodeobj.getVotes()}</td>
+           <td class="node_tlist_status">${_('The status of this node is unknown')}</td>
+           </py:when>
++          <py:when test="'Removing'">
++          <td class="icon">
++            <img src="${tg.url('/images/exclamation.png')}" alt="Node is being deleted." />
++          </td>
++          <td class="main_id">
++	    <a href="${tmpl_context.cluster_url + entity_name}">
++              <span class="entity_fail">${entity_name}</span>
++            </a>
++          </td>
++          <td class="node_tlist_id">${nodeobj and nodeobj.getID()}</td>
++          <td class="node_tlist_votes">${nodeobj and nodeobj.getVotes()}</td>
++          <td class="node_tlist_status">${_('Node is being removed')}</td>
++          </py:when>
+           </py:choose>
+           <td class="node_tlist_ip">
+             <py:if test="nodedbobj">
+@@ -124,11 +142,11 @@
+           </td>
+         </tr>
+         </py:if>
+-        <py:if test="not cluster_status or not cluster_status.nodes"> 
+         <tr py:for="i in nodes"
+           py:with="hostname = i.hostname">
+-          <td class="checkbox"><input type="checkbox" name="${hostname}"/></td>
+-          <td class="icon">
++	  <py:if test="cluster_status.nodes.keys().count(i.hostname) == 0">
++	  <td class="checkbox"><input type="checkbox" name="${hostname}"/></td>
++	  <td class="icon">
+             <img src="${tg.url('/images/question.png')}" alt="Status of the node is unknown." />
+           </td>
+           <td class="main_id">
+@@ -138,9 +156,9 @@
+           </td>
+           <td class="node_tlist_id"></td>
+           <td class="node_tlist_votes"></td>
+-          <td class="node_tlist_status">${_('The status of this node is unknown')}</td>
++          <td class="node_tlist_status">${_('This node is currently being added')}</td>
++	  </py:if>
+         </tr>
+-        </py:if>
+       </tbody>
+     </table>
+   </div>
+diff --git a/luci/widget_validators/validate_create_cluster_form.py b/luci/widget_validators/validate_create_cluster_form.py
+index 3c5043d..eeb1bca 100644
+--- a/luci/widget_validators/validate_create_cluster_form.py
++++ b/luci/widget_validators/validate_create_cluster_form.py
+@@ -289,5 +289,4 @@ def validate_node_add_form(model, db_obj, **kw):
+         flash(_('An error occurred while adding nodes to cluster "%s": %s') % (cluster_name, str(e)), 'error')
+         return
+ 
+-    flash(_('Creating nodes for cluster "%s", this may take up to 30 seconds. Please refresh screen to view created cluster.') % cluster_name, 'info')
+-    redirect("/cluster")
++    flash(_('Creating nodes for cluster "%s", this may take up to 30 seconds. Please refresh screen to update status.') % cluster_name, 'info')

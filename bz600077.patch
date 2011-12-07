@@ -1,0 +1,33 @@
+commit 2bbafbbdf0ebaccf8523b42be6273a31839641cc
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Fri Jul 9 14:11:41 2010 -0400
+
+    Fix rhbz#600077: cman "two_node" attribute should not be set when using qdisk
+
+diff --git a/luci/lib/ClusterConf/ModelBuilder.py b/luci/lib/ClusterConf/ModelBuilder.py
+index 3dc447b..6fe2386 100644
+--- a/luci/lib/ClusterConf/ModelBuilder.py
++++ b/luci/lib/ClusterConf/ModelBuilder.py
+@@ -1215,7 +1215,7 @@ class ModelBuilder:
+         self.cluster_ptr.addChild(cman)
+         self.CMAN_ptr = cman
+ 
+-      if not self.quorumd_ptr:
++      if not self.isQuorumd():
+         if clusternodes_count == 2:
+           self.CMAN_ptr.addAttribute('two_node', '1')
+           self.CMAN_ptr.addAttribute('expected_votes', '1')
+diff --git a/luci/widget_validators/validate_cluster_prop.py b/luci/widget_validators/validate_cluster_prop.py
+index 7b2e6dd..61b0ba4 100644
+--- a/luci/widget_validators/validate_cluster_prop.py
++++ b/luci/widget_validators/validate_cluster_prop.py
+@@ -208,7 +208,8 @@ def validate_qdisk_prop_form(model, **kw):
+         errors.append(_('You may give either a qdisk device or label, but not both'))
+ 
+     qd = QuorumD()
+-    qd.addAttribute('interval', str(interval))
++    if interval:
++        qd.addAttribute('interval', str(interval))
+     if votes:
+         qd.addAttribute('votes', str(votes))
+     if tko:

@@ -1,0 +1,701 @@
+commit a75055c99e1262f924c4c7047b516a71c56fa476
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Fri Jun 11 14:51:25 2010 -0400
+
+    Make the current cluster version available globally
+
+diff --git a/luci/controllers/cluster.py b/luci/controllers/cluster.py
+index f227600..e2ac444 100644
+--- a/luci/controllers/cluster.py
++++ b/luci/controllers/cluster.py
+@@ -52,7 +52,6 @@ class ClusterController(BaseController):
+             for key, element in kw.items():
+                 if element == "on":
+                      db_remove_cluster(key)
+-
+         redirect('/cluster/')
+ 
+     @expose()
+@@ -76,64 +75,43 @@ class IndividualClusterController(BaseController):
+         identity = request.environ.get('repoze.who.identity')
+         self.username = identity['repoze.who.userid']
+         tmpl_context.show_sidebar = True
++        tmpl_context.cluster_name = self.name
++        tmpl_context.cluster_url = '/cluster/%s/' % self.name
+ 
+-    @expose("luci.templates.node")
+-    def default(self):
+         try:
+             rc = get_agent_for_cluster(self.name)
+         except:
+             rc = None
+-        cmodel = get_model_for_cluster(self.name)
+-        tmpl_context.cluster_data = cmodel
++
++        self.model = get_model_for_cluster(self.name, rc)
++        tmpl_context.cluster_data = self.model
++
++        if self.model:
++            tmpl_context.cluster_version = self.model.getClusterVersion()
++        else:
++            tmpl_context.cluster_version = app_globals.DEFAULT_CLUSTER_VERSION
+         tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+-        tmpl_context.cluster_url = '/cluster/%s/' % self.name
++
++    @expose("luci.templates.node")
++    def default(self):
+         return dict(page='nodes', name=self.nodename, base_url='/nodes')
+ 
+     @expose("luci.templates.node")
+     def nodes(self):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+-        tmpl_context.cluster_url = '/cluster/%s/' % self.name
+         return dict(use_referrer=False, page='nodes', name=self.nodename, base_url='/nodes')
+ 
+     @expose("luci.templates.node")
+     def add_nodes_cmd(self, command=None, **kw):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+-        tmpl_context.cluster_url = '/cluster/%s/' % self.name
+         return dict(use_referrer=False, page='nodes', name=self.nodename, base_url='/nodes')
+ 
+     @expose("luci.templates.node")
+     def nodes_fence_cmd(self, command=None, **kw):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+-        tmpl_context.cluster_url = '/cluster/%s/' % self.name
+-        
+-        if not cmodel:
++        if not self.model:
+             flash(_('Unable to contact any nodes in this cluster'),
+                 status="error")
+             redirect(tmpl_context.cluster_url)
+ 
+-        vret = vcp.validate_node_fence_form(cmodel, **kw)
++        vret = vcp.validate_node_fence_form(self.model, **kw)
+         if vret[0] is True:
+             log.info('User "%s" updated the fence properties for cluster "%s" node "%s"'
+                 % (self.username, self.name, kw.get('node')))
+@@ -141,8 +119,8 @@ class IndividualClusterController(BaseController):
+             msgs = vret[1].get('flash')
+             if msgs:
+                 flash(', '.join(msgs))
+-            cmodel.setModified(True)
+-            rh.update_cluster_conf(cmodel)
++            self.model.setModified(True)
++            rh.update_cluster_conf(self.model)
+         else:
+             msgs = vret[1].get('errors')
+             if msgs and len(msgs) > 0:
+@@ -152,17 +130,7 @@ class IndividualClusterController(BaseController):
+     # This processes all of the commands that we can apply to a node
+     @expose("luci.templates.node")
+     def nodes_cmd(self, command=None, **kw):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+-        tmpl_context.cluster_url = '/cluster/%s/' % self.name
+-
+-        if not cmodel:
++        if not self.model:
+             flash(_('Unable to contact any nodes in this cluster'),
+                 status="error")
+             redirect(tmpl_context.cluster_url)
+@@ -210,42 +178,24 @@ class IndividualClusterController(BaseController):
+             flash(_('An unknown command "%s" was given for nodes "%s"')
+                     % (command, ', '.join(cur_list)),
+                 status='error')
+-        redirect(tmpl_context.cluster_url + kw["name"])
++        redirect(tmpl_context.cluster_url + kw.get('name'))
+ 
+     @expose("luci.templates.resource")
+     def resources(self, *args):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+-        tmpl_context.cluster_url = '/cluster/%s/' % self.name
++        base_url = '/cluster/%s/resources' % self.name
++        resources_cmd = '/cluster/%s/resources_cmd' % self.name
+ 
+         if (len(args) == 1):
+             resourcename = args[0]
+         else:
+             resourcename = None
+-
+-        base_url = '/cluster/%s/resources' % self.name
+-        resources_cmd = '/cluster/%s/resources_cmd' % self.name
+         return dict(page='nodes', name=resourcename, base_url=base_url, resources_cmd=resources_cmd)
+ 
+     @expose("luci.templates.resource")
+     def resources_cmd(self, command=None, **kw):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+         tmpl_context.cluster_url = '/cluster/%s/resources' % self.name
+         
+-        if not cmodel:
++        if not self.model:
+             flash(_('Unable to contact any nodes in this cluster'),
+                 status="error")
+             redirect(tmpl_context.cluster_url)
+@@ -266,17 +216,16 @@ class IndividualClusterController(BaseController):
+             redirect(tmpl_context.cluster_url)
+         if command == 'Delete':
+             errors = []
+-            res_ptr = cmodel.getResourcesPtr()
++            res_ptr = self.model.getResourcesPtr()
+             for i in cur_list:
+                 try:
+-                    cur_res = cmodel.getResourceByName(i)
++                    cur_res = self.model.getResourceByName(i)
+                     if cur_res.getRefcount() > 1:
+                         errors.append(_('Global resource "%s" is in use so cannot be removed') % i)
+                     else:
+                         res_ptr.removeChild(cur_res)
+                 except:
+                     pass
+-
+             if len(errors) != 0:
+                 flash(_('%s') % ', '.join(errors), status='error')
+             else:    
+@@ -285,21 +234,21 @@ class IndividualClusterController(BaseController):
+                 flash(_("Deleting resources %s") % ', '.join(cur_list),
+                     status='info')
+ 
+-                cmodel.setModified()
+-                rh.update_cluster_conf(cmodel)
++                self.model.setModified()
++                rh.update_cluster_conf(self.model)
+         elif command in ("Create", "Edit"):
+             if command == 'Create':
+                 cur_action = _('Created')
+             else:
+                 cur_action = _('Edited')
+-            vret = validate_resource_form(cmodel, **kw)
++            vret = validate_resource_form(self.model, **kw)
+             if vret[0] is True:
+                 res_name = kw.get('resourcename')
+                 log.info('User "%s" %s global resource "%s" in cluster "%s"'
+                     % (self.username, cur_action, res_name, self.name))
+                 flash(_('%s global resource "%s"') % (cur_action, res_name))
+-                cmodel.setModified(True)
+-                rh.update_cluster_conf(cmodel)
++                self.model.setModified(True)
++                rh.update_cluster_conf(self.model)
+                 redirect('%s/%s' % (tmpl_context.cluster_url, res_name))
+             else:
+                 msgs = vret[1].get('errors')
+@@ -315,38 +264,20 @@ class IndividualClusterController(BaseController):
+ 
+     @expose("luci.templates.service")
+     def services(self, *args):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+-        tmpl_context.cluster_url = '/cluster/%s/' % self.name
++        base_url = '/cluster/%s/services' % self.name
++        services_cmd = '/cluster/%s/services_cmd' % self.name
+ 
+         if (len(args) == 1):
+             servicename = args[0]
+         else:
+             servicename = None
+-
+-        base_url = '/cluster/%s/services' % self.name
+-        services_cmd = '/cluster/%s/services_cmd' % self.name
+         return dict(page='nodes', name=servicename, base_url=base_url, services_cmd=services_cmd)
+ 
+     @expose("luci.templates.service")
+     def services_cmd(self, command=None, **kw):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+         tmpl_context.cluster_url = '/cluster/%s/services' % self.name
+ 
+-        if not cmodel:
++        if not self.model:
+             flash(_('Unable to contact any nodes in this cluster'),
+                 status="error")
+             redirect(tmpl_context.cluster_url)
+@@ -374,10 +305,10 @@ class IndividualClusterController(BaseController):
+             flash(_("Deleting services %s") % ', '.join(cur_list),
+                 status='info')
+             for i in cur_list:
+-                cmodel.deleteService(i)
++                self.model.deleteService(i)
+ 
+-            cmodel.setModified()
+-            rh.update_cluster_conf(cmodel)
++            self.model.setModified()
++            rh.update_cluster_conf(self.model)
+             redirect(tmpl_context.cluster_url)
+         if command == 'Start':
+             log.info('User "%s" started service "%s" in cluster "%s"'
+@@ -405,15 +336,15 @@ class IndividualClusterController(BaseController):
+                 cur_action = _('Created')
+             else:
+                 cur_action = _('Edited')
+-            vret = validate_clusvc_form(cmodel, **kw)
++            vret = validate_clusvc_form(self.model, **kw)
+             kw['name'] = ''
+             if vret[0] is True:
+                 svc_name = kw.get('svc_name')
+                 log.info('User "%s" %s cluster service "%s" in cluster "%s"'
+                     % (self.username, cur_action, svc_name, self.name))
+                 flash(_('%s cluster service "%s"') % (cur_action, svc_name))
+-                cmodel.setModified(True)
+-                rh.update_cluster_conf(cmodel)
++                self.model.setModified(True)
++                rh.update_cluster_conf(self.model)
+             else:
+                 msgs = vret[1].get('errors')
+                 if msgs and len(msgs) > 0:
+@@ -431,37 +362,19 @@ class IndividualClusterController(BaseController):
+ 
+     @expose("luci.templates.qdisk")
+     def qdisk(self, *args):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+-        tmpl_context.cluster_url = '/cluster/%s/' % self.name
+         qdisk_cmd = '/cluster/%s/qdisk_cmd' % self.name
+         return dict(page='nodes', base_url = '/cluster/' + self.name + '/qdisk', qdisk_cmd = qdisk_cmd)
+ 
+     @expose("luci.templates.qdisk")
+     def qdisk_cmd(self, command=None, **kw):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+-        tmpl_context.cluster_url = '/cluster/%s/' % self.name
+         qdisk_cmd = '/cluster/%s/qdisk_cmd' % self.name
+ 
+-        if not cmodel:
++        if not self.model:
+             flash(_('Unable to contact any nodes in this cluster'),
+                 status="error")
+             return dict(use_referrer=False, page='nodes', base_url = '/cluster/' + self.name + '/qdisk', qdisk_cmd=qdisk_cmd)
+ 
+-        vret = vcp.validate_qdisk_prop_form(cmodel, **kw)
++        vret = vcp.validate_qdisk_prop_form(self.model, **kw)
+         if vret[0] is True:
+             log.info('User "%s" updated the quorum disk properties for cluster "%s"'
+                         % (self.username, self.name))
+@@ -470,8 +383,8 @@ class IndividualClusterController(BaseController):
+             if msgs:
+                 flash(', '.join(msgs))
+ 
+-            cmodel.setModified(True)
+-            rh.update_cluster_conf(cmodel)
++            self.model.setModified(True)
++            rh.update_cluster_conf(self.model)
+         else:
+             msgs = vret[1].get('errors')
+             if msgs and len(msgs) > 0:
+@@ -480,35 +393,19 @@ class IndividualClusterController(BaseController):
+ 
+     @expose("luci.templates.failover")
+     def failovers(self, *args):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+-        tmpl_context.cluster_url = '/cluster/%s/' % self.name
++        failovers_cmd = '/cluster/%s/failovers_cmd' % self.name
++
+         if len(args) == 1:
+             failovername = args[0]
+         else:
+             failovername = None
+-        failovers_cmd = '/cluster/%s/failovers_cmd' % self.name
+         return dict(page='nodes', name=failovername, base_url = '/cluster/' + self.name + '/failovers', failovers_cmd=failovers_cmd)
+ 
+     @expose("luci.templates.failover")
+     def failovers_cmd(self, command=None, **kw):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+         tmpl_context.cluster_url = '/cluster/%s/failovers' % self.name
+ 
+-        if not cmodel:
++        if not self.model:
+             flash(_('Unable to contact any nodes in this cluster'),
+                 status="error")
+             redirect(tmpl_context.cluster_url)
+@@ -533,9 +430,9 @@ class IndividualClusterController(BaseController):
+                 % (self.username, ', '.join(cur_list), self.name))
+             flash(_('Deleting failover domains %s') % ', '.join(cur_list))
+             for i in cur_list:
+-                cmodel.deleteFailoverDomain(i)
+-            cmodel.setModified(True)
+-            rh.update_cluster_conf(cmodel)
++                self.model.deleteFailoverDomain(i)
++            self.model.setModified(True)
++            rh.update_cluster_conf(self.model)
+ 
+             redirect(tmpl_context.cluster_url)
+ 
+@@ -547,40 +444,40 @@ class IndividualClusterController(BaseController):
+             redirect(tmpl_context.cluster_url)
+         
+         if command == 'update_settings':
+-            vret = vcp.validate_fdom_prop_settings_form(cmodel, **kw)
++            vret = vcp.validate_fdom_prop_settings_form(self.model, **kw)
+             if vret[0] is True:
+                 log.info('User "%s" updated the settings of failover domain "%s" in cluster "%s"'
+                     % (self.username, cur_list[0], self.name))
+                 flash(_('Updating settings for failover domain "%s"') % cur_list[0])
+-                cmodel.setModified(True)
+-                rh.update_cluster_conf(cmodel)
++                self.model.setModified(True)
++                rh.update_cluster_conf(self.model)
+             else:
+                 msgs = vret[1].get('errors')
+                 if msgs and len(msgs) > 0:
+                     flash(', '.join(msgs), status="error")
+-            redirect(tmpl_context.cluster_url + '/' + kw["name"])
++            redirect(tmpl_context.cluster_url + '/' + kw.get('name'))
+         elif command == 'update_properties':
+-            vret = vcp.validate_fdom_prop_form(cmodel, **kw)
++            vret = vcp.validate_fdom_prop_form(self.model, **kw)
+             if vret[0] is True:
+                 log.info('User "%s" updated the properties of failover domain "%s" in cluster "%s"'
+                     % (self.username, cur_list[0], self.name))
+                 flash(_('Updating properties for failover domain "%s"') % cur_list[0])
+-                cmodel.setModified(True)
+-                rh.update_cluster_conf(cmodel)
++                self.model.setModified(True)
++                rh.update_cluster_conf(self.model)
+             else:
+                 msgs = vret[1].get('errors')
+                 if msgs and len(msgs) > 0:
+                     flash(', '.join(msgs), status="error")
+-            redirect(tmpl_context.cluster_url + '/' + kw["name"])
++            redirect(tmpl_context.cluster_url + '/' + kw.get('name'))
+         elif command == 'create':
+-            vret = vcp.validate_fdom_create_form(cmodel, **kw)
++            vret = vcp.validate_fdom_create_form(self.model, **kw)
+             if vret[0] is True:
+                 log.info('User "%s" created failover domain "%s" in cluster "%s"'
+                     % (self.username, kw.get('fdom_name'), self.name))
+                 flash(_('Creating failover domain "%s"') % kw.get('fdom_name'))
+ 
+-                cmodel.setModified(True)
+-                rh.update_cluster_conf(cmodel)
++                self.model.setModified(True)
++                rh.update_cluster_conf(self.model)
+             else:
+                 msgs = vret[1].get('errors')
+                 if msgs and len(msgs) > 0:
+@@ -596,37 +493,19 @@ class IndividualClusterController(BaseController):
+ 
+     @expose("luci.templates.fence")
+     def fences(self, *args):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+-        tmpl_context.cluster_url = '/cluster/%s/' % self.name
++        fences_cmd = '/cluster/%s/fences_cmd' % self.name
+ 
+         if len(args) == 1:
+             fencename = args[0]
+         else:
+             fencename = None
+-
+-        fences_cmd = '/cluster/%s/fences_cmd' % self.name
+         return dict(page='nodes', name=fencename, base_url='/cluster/' + self.name + '/fences', fences_cmd=fences_cmd)
+ 
+     @expose("luci.templates.fence")
+     def fences_cmd(self, command=None, **kw):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+         tmpl_context.cluster_url = '/cluster/%s/fences' % self.name
+ 
+-        if not cmodel:
++        if not self.model:
+             flash(_('Unable to contact any nodes in this cluster'),
+                 status="error")
+             redirect(tmpl_context.cluster_url)
+@@ -647,10 +526,10 @@ class IndividualClusterController(BaseController):
+             redirect(tmpl_context.cluster_url)
+ 
+         if command == 'Create':
+-            fret = validateNewFenceDevice(cmodel, **kw)
++            fret = validateNewFenceDevice(self.model, **kw)
+             if fret[0] is True:
+-                cmodel.setModified(True)
+-                rh.update_cluster_conf(cmodel)
++                self.model.setModified(True)
++                rh.update_cluster_conf(self.model)
+                 log.info('User "%s" created fence devices "%s" in cluster "%s"'
+                     % (self.username, ', '.join(cur_list), self.name))
+             else:
+@@ -663,15 +542,18 @@ class IndividualClusterController(BaseController):
+             flash(_('Deleting fence devices ') + ', '.join(cur_list))
+             updated = False
+             for i in cur_list:
+-                updated |= cmodel.deleteFenceDevice(i)
++                cur_fencedev = self.model.getFenceDeviceByName(i)
++                if not cur_fencedev:
++                    continue
++                updated |= self.model.deleteFenceDevice(cur_fencedev)
+             if updated:
+-                cmodel.setModified()
+-                rh.update_cluster_conf(cmodel)
++                self.model.setModified()
++                rh.update_cluster_conf(self.model)
+         elif command == 'Update':
+-            fret = validateFenceDevice(cmodel, **kw)
++            fret = validateFenceDevice(self.model, **kw)
+             if fret[0] is True:
+-                cmodel.setModified(True)
+-                rh.update_cluster_conf(cmodel)
++                self.model.setModified(True)
++                rh.update_cluster_conf(self.model)
+                 log.info('User "%s" created fence device "%s" in cluster "%s"'
+                     % (self.username, ', '.join(cur_list), self.name))
+             else:
+@@ -688,42 +570,25 @@ class IndividualClusterController(BaseController):
+ 
+     @expose("luci.templates.configure")
+     def configure(self, *args):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+-        tmpl_context.cluster_url = '/cluster/%s/' % self.name
+         configure_cmd = '/cluster/%s/configure_cmd' % self.name
+         return dict(use_referrer=False, page='nodes', name='configure', base_url='/cluster/' + self.name + '/configure', configure_cmd=configure_cmd)
+ 
+     @expose("luci.templates.configure")
+     def configure_cmd(self, command=None, *args, **kw):
+-        try:
+-            rc = get_agent_for_cluster(self.name)
+-        except:
+-            rc = None
+-        cmodel = get_model_for_cluster(self.name, rc)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name, rc)
+-        tmpl_context.cluster_name = self.name
+         tmpl_context.cluster_url = '/cluster/%s/configure' % self.name
+ 
+-        if not cmodel:
++        if not self.model:
+             flash(_('Unable to contact any nodes in this cluster'),
+                 status="error")
+             redirect(tmpl_context.cluster_url)
+ 
+-        vret = vcp.validate_cluster_config_form(cmodel, **kw)
++        vret = vcp.validate_cluster_config_form(self.model, **kw)
+         if vret[0] is True:
+             log.info('User "%s" updated the cluster properties for cluster "%s"'
+                     % (self.username, self.name))
+             flash("Applying Settings")
+-            cmodel.setModified(True)
+-            rh.update_cluster_conf(cmodel)
++            self.model.setModified(True)
++            rh.update_cluster_conf(self.model)
+         else:
+             msgs = vret[1].get('errors')
+             if msgs and len(msgs) > 0:
+@@ -732,13 +597,7 @@ class IndividualClusterController(BaseController):
+ 
+     @expose()
+     def lookup(self, nodename, *args):
+-        clustername = self.name
+-        cmodel = get_model_for_cluster(self.name)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name)
+-        tmpl_context.cluster_name = clustername
+-        tmpl_context.cluster_url = '/cluster/%s/' % clustername
+-        inc = IndividualNodeController(clustername, self.data, nodename)
++        inc = IndividualNodeController(self.name, self.data, nodename)
+         return inc, args
+ 
+ class IndividualNodeController(BaseController):
+@@ -750,19 +609,9 @@ class IndividualNodeController(BaseController):
+ 
+     @expose("luci.templates.node")
+     def default(self):
+-        cmodel = get_model_for_cluster(self.name)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name)
+-        tmpl_context.cluster_name = self.name
+-        tmpl_context.cluster_url = '/cluster/%s/' % self.name
+         return dict(page='nodes', name=self.nodename, base_url='/nodes')
+ 
+     @expose()
+     def lookup(self, nodename, *args):
+-        clustername = self.name
+-        cmodel = get_model_for_cluster(self.name)
+-        tmpl_context.cluster_data = cmodel
+-        tmpl_context.cluster_status = get_status_for_cluster(self.name)
+-        tmpl_context.cluster_name = clustername
+-        icc = IndividualClusterController(clustername, self.data, nodename)
++        icc = IndividualClusterController(self.name, self.data, nodename)
+         return icc, args
+diff --git a/luci/lib/app_globals.py b/luci/lib/app_globals.py
+index 8d28523..8913d74 100644
+--- a/luci/lib/app_globals.py
++++ b/luci/lib/app_globals.py
+@@ -15,6 +15,8 @@ from luci.lib.ClusterConf.Totem import Totem
+ __all__ = ['Globals']
+ 
+ 
++DEFAULT_CLUSTER_VERSION = 3
++
+ class Globals(object):
+     """Container for objects available throughout the life of the application.
+ 
+diff --git a/luci/templates/configure.html b/luci/templates/configure.html
+index 8f9ec38..eda6592 100644
+--- a/luci/templates/configure.html
++++ b/luci/templates/configure.html
+@@ -77,7 +77,7 @@
+ 	      <div class="row"><label>Post Join Delay</label>
+ 	        <input type="text" class="text" name="post_join_delay" value="${cluster_data and cluster_data.getFenceDaemonPtr().getAttribute('post_join_delay')}"/>
+           </div>
+-          <div class="row" py:if="(cluster_data and cluster_data.getClusterVersion()) == 2">
++          <div class="row" py:if="tmpl_context.cluster_version == 2">
+ 	        <input type="checkbox" class="checkbox" name="fence_xvmd"
+ 	            py:attrs="cluster_data and cluster_data.hasFenceXVM() and { 'checked': 'checked' } or {}"/>
+ 	            <label class="choice">Run XVM fence daemon</label>
+diff --git a/luci/templates/fence_devices.html b/luci/templates/fence_devices.html
+index 85b377e..0ad1a8b 100644
+--- a/luci/templates/fence_devices.html
++++ b/luci/templates/fence_devices.html
+@@ -2697,8 +2697,7 @@ ${fence_virsh(None,0)}
+ 
+ <div py:def="fence_device_select(model, cont_id)" class="hidden" py:strip="">
+ 	<div class="row">
+-	<div name="fence_select_area"
+-		py:with="cluster_version = model and model.getClusterVersion() or '3'">
++	<div name="fence_select_area">
+ 		<select name="select_div"
+ 			onchange="swap_fence_form(this.options[this.selectedIndex].value, '${cont_id}');this.selectedIndex=0">
+ 			<option>-- Select a fence device --</option>
+@@ -2722,8 +2721,8 @@ ${fence_virsh(None,0)}
+ 			<option name="fence_egenera" value="fence_egenera">Egenera SAN Controller</option>
+ 			<option name="fence_eps" value="fence_eps">ePowerSwitch</option>
+ 
+-			<py:choose test="cluster_version">
+-				<py:when test="'3'">
++			<py:choose test="tmpl_context.cluster_version">
++				<py:when test="3">
+ 					<option name="fence_virt" value="fence_virt">Fence virt</option>
+ 					<option name="fence_xvm" value="fence_xvm">Fence virt (Multicast Mode)</option>
+ 				</py:when>
+diff --git a/luci/templates/resource_list.html b/luci/templates/resource_list.html
+index 943cbed..ff13a86 100644
+--- a/luci/templates/resource_list.html
++++ b/luci/templates/resource_list.html
+@@ -1300,7 +1300,6 @@ ${vm_resource(None,None,None,0)}
+ <div py:def="resource_selector(model, dest, parentid)" id="resource_select_area">
+ 	<select name="res_select" id="resource_selector" class="resource_selector"
+ 		py:with="
+-			cluster_version = model and model.getClusterVersion() or '3';
+ 			svc_onchange_fn = 'insert_resource(this.options[this.selectedIndex].value, \'%s\', this.form, \'%s\');this.selectedIndex=0' % (dest, parentid);
+ 			res_onchange_fn = 'swap_resource_form(this.options[this.selectedIndex].value);this.selectedIndex=0'"
+ 		py:attrs="{'onchange': model and svc_onchange_fn or res_onchange_fn}">
+@@ -1318,8 +1317,8 @@ ${vm_resource(None,None,None,0)}
+ 		<option>-- Select a resource type --</option>
+ 		<option name="apache_resource" value="apache_resource">Apache</option>
+ 		<option name="fs_resource" value="fs_resource">Filesystem</option>
+-		<py:choose test="cluster_version">
+-			<py:when test="'3'">
++		<py:choose test="tmpl_context.cluster_version">
++			<py:when test="3">
+ 				<option name="clusterfs_resource" value="clusterfs_resource">GFS2</option>
+ 			</py:when>
+ 			<py:otherwise>
+diff --git a/luci/widget_validators/validate_cluster_prop.py b/luci/widget_validators/validate_cluster_prop.py
+index ab61735..dab2542 100644
+--- a/luci/widget_validators/validate_cluster_prop.py
++++ b/luci/widget_validators/validate_cluster_prop.py
+@@ -371,7 +371,7 @@ def validate_cluster_config_form(model, **kw):
+                 model.delFenceXVM()
+             else:
+                 xvm_obj = FenceXVMd()
+-            model.addFenceXVM(xvm_obj)
++                model.addFenceXVM(xvm_obj)
+         return (len(errors) < 1, {'errors': errors})
+     elif conf_page == 'General':
+         config_version = kw.get('config_version')

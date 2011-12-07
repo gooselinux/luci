@@ -1,0 +1,26 @@
+commit fa4adadf3611814652d5ad8a1fc5d4c07073bae7
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Thu Jun 10 01:10:00 2010 -0400
+
+    Fix rhbz #600073: Update resource agent list
+
+diff --git a/luci/templates/resource_list.html b/luci/templates/resource_list.html
+index bed0a4b..943cbed 100644
+--- a/luci/templates/resource_list.html
++++ b/luci/templates/resource_list.html
+@@ -1317,7 +1317,6 @@ ${vm_resource(None,None,None,0)}
+ 
+ 		<option>-- Select a resource type --</option>
+ 		<option name="apache_resource" value="apache_resource">Apache</option>
+-		<option name="drbd_resource" value="drbd_resource">DRBD</option>
+ 		<option name="fs_resource" value="fs_resource">Filesystem</option>
+ 		<py:choose test="cluster_version">
+ 			<py:when test="'3'">
+@@ -1330,7 +1329,6 @@ ${vm_resource(None,None,None,0)}
+ 		<option name="ip_resource" value="ip_resource">IP Address</option>
+ 		<option name="lvm_resource" value="lvm_resource">HA LVM</option>
+ 		<option name="mysql_resource" value="mysql_resource">MySQL</option>
+-		<option name="named_resource" value="named_resource">Named Configuration</option>
+ 		<option name="netfs_resource" value="netfs_resource">NFS/CIFS Mount</option>
+ 		<option name="nfsclient_resource" value="nfsclient_resource">NFS Client</option>
+ 		<option name="nfsexport_resource" value="nfsexport_resource">NFS v3 Export</option>

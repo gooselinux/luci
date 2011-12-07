@@ -1,0 +1,360 @@
+commit be5bc438392f460820183cc937679e54f160fa12
+Author: Jan Pokorny <jpokorny@redhat.com>
+Date:   Tue Aug 3 22:48:04 2010 +0200
+
+    Fix rhbz#618578 - netmask field for ip resource
+
+diff --git a/luci/controllers/cluster.py b/luci/controllers/cluster.py
+index 13c8a2d..a3a90ec 100644
+--- a/luci/controllers/cluster.py
++++ b/luci/controllers/cluster.py
+@@ -12,7 +12,7 @@
+ from tg import request, expose, redirect, flash, app_globals, tmpl_context
+ 
+ # third party imports
+-from repoze.what.predicates import not_anonymous 
++from repoze.what.predicates import not_anonymous
+ from pylons.i18n import ugettext as _
+ 
+ # project specific imports
+@@ -166,7 +166,7 @@ class IndividualClusterController(BaseController):
+         if kw.get("moveup_method"):
+             node = self.model.retrieveNodeByName(kw.get("node"))
+             methodname = kw.get("moveup_method")
+-            levels = node.getFenceLevels() 
++            levels = node.getFenceLevels()
+             for level in levels:
+                 if level.getAttribute("name") == methodname:
+                     position = levels.index(level)
+@@ -180,7 +180,7 @@ class IndividualClusterController(BaseController):
+         if kw.get("movedown_method"):
+             node = self.model.retrieveNodeByName(kw.get("node"))
+             methodname = kw.get("movedown_method")
+-            levels = node.getFenceLevels() 
++            levels = node.getFenceLevels()
+             for level in levels:
+                 if level.getAttribute("name") == methodname:
+                     position = levels.index(level)
+@@ -302,8 +302,8 @@ class IndividualClusterController(BaseController):
+         base_url = '/cluster/%s/resources' % self.name
+         resources_cmd = '/cluster/%s/resources_cmd' % self.name
+ 
+-        if (len(args) == 1):
+-            resourcename = args[0]
++        if (len(args) >= 1):
++            resourcename = '/'.join(args)
+         else:
+             resourcename = None
+         return dict(page='nodes', name=resourcename, base_url=base_url, resources_cmd=resources_cmd)
+@@ -346,7 +346,7 @@ class IndividualClusterController(BaseController):
+                     pass
+             if len(errors) != 0:
+                 flash(_('%s') % ', '.join(errors), status='error')
+-            else:    
++            else:
+                 log.info('User "%s" deleted resource "%s" in cluster "%s"'
+                     % (self.username, ', '.join(cur_list), self.name))
+                 flash(_("Deleting resources %s") % ', '.join(cur_list),
+@@ -359,15 +359,28 @@ class IndividualClusterController(BaseController):
+                 cur_action = _('Created')
+             else:
+                 cur_action = _('Edited')
++            res_type = kw.get('type', '')
++            if res_type == 'ip':
++                # The whole address parameter has to be constructed
++                # from its parts ('address_nominal', 'address_mask') first.
++                address = kw.get('address_nominal', '').strip()
++                if len(kw.get('address_mask', '')) > 0:
++                    mask = kw.get('address_mask', '').strip()
++                    if not mask.startswith('/'):
++                        address += '/'
++                    address += mask
++                kw['address'] = address
++                kw.pop('address_nominal', None)
++                kw.pop('address_mask', None)
+             vret = validate_resource_form(self.model, **kw)
+             if vret[0] is True:
+-                res_name = kw.get('resourcename')
+                 # For IP resources there is no name, just an IP Address
+                 # and to make IP addresses work you need to add a .html
+-                if res_name == None and kw.get('address'):
+-                    res_name = kw.get('address')
++                if res_type == 'ip':
++                    res_name = kw['address']
+                     redir_fmt = '%s/%s.html'
+                 else:
++                    res_name = kw.get('resourcename')
+                     redir_fmt = '%s/%s'
+                 log.info('User "%s" %s global resource "%s" in cluster "%s"'
+                     % (self.username, cur_action, res_name, self.name))
+diff --git a/luci/templates/resource_list.html b/luci/templates/resource_list.html
+index 6ba06e5..3937400 100644
+--- a/luci/templates/resource_list.html
++++ b/luci/templates/resource_list.html
+@@ -3,21 +3,29 @@
+ 	  py:strip="">
+ 
+ <div py:def="ip_resource(res, form_id, parent_id, isref)" name="IP" id="ip_resource" class="row rescfg"
+-	py:with="global_resource = res and isref != 0"
++	py:with="global_resource = res and isref != 0;
++			ip_address = res and res.getAttribute('address').split('/') or []"
+ 	py:attrs="res and {'id': 'global_res_%s' % res.getName(), 'name': res.getName()}">
+ 	<input name="global" type="hidden" value="1" py:if="global_resource"/>
+ 	<input name="parent_id" type="hidden" value="${parent_id}"/>
+ 	<input name="form_id" type="hidden" value="${form_id}"/>
+ 	<input name="oldname" type="hidden"
+-		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
++		py:attrs="res and {'value':res.getAttribute('address')} or {}" />
+ 	<input name="type" type="hidden" value="ip" />
+ 
+ 	 <table class="formtable">
+ 		<tr>
+ 			<td>IP address</td>
+ 			<td>
+-				<input name="address" type="text" class="text"
+-					py:attrs="res and {'value': res.getAttribute('address'), 'disabled':global_resource and 'disabled' or None} or {}" />
++				<input name="address_nominal" type="text" class="text"
++					py:attrs="ip_address and {'value': ip_address[0], 'disabled':global_resource and 'disabled' or None} or {}" />
++			</td>
++		</tr>
++		<tr>
++			<td>Netmask bits (optional)</td>
++			<td>
++				<input name="address_mask" type="text" class="text"
++					py:attrs="len(ip_address) &gt; 1 and {'value': ip_address[1], 'disabled':global_resource and 'disabled' or None} or {}" />
+ 			</td>
+ 		</tr>
+ 		<tr>
+diff --git a/luci/widget_validators/validate_resource.py b/luci/widget_validators/validate_resource.py
+index c5ef6be..8234159 100644
+--- a/luci/widget_validators/validate_resource.py
++++ b/luci/widget_validators/validate_resource.py
+@@ -443,7 +443,7 @@ def create_resource(res_type, model, **kw):
+ 		res = resource_table[res_type][1]()
+ 
+ 	if res_type == 'ip':
+-		rname = kw['address'].strip()
++		rname = kw['address']
+ 	elif res_type == 'vm':
+ 		rname = ''
+ 	else:
+
+commit b2c85e7499cc16236103038d52ede12dcf1fe00f
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Tue Aug 3 18:17:23 2010 -0400
+
+    Fix netmask field inside of IP resources in services
+
+diff --git a/luci/widget_validators/validate_resource.py b/luci/widget_validators/validate_resource.py
+index 8234159..1870f4c 100644
+--- a/luci/widget_validators/validate_resource.py
++++ b/luci/widget_validators/validate_resource.py
+@@ -536,7 +536,12 @@ def validate_clusvc_form(model, **kw):
+ 
+ 		try:
+ 			if res_type == 'ip':
+-				dummy_form['resourcename'] = dummy_form['address']
++				mask = dummy_form.get('address_mask')
++				if mask:
++					dummy_form['resourcename'] = '%s/%s' % (dummy_form['address_nominal'], dummy_form['address_mask'])
++				else:
++					dummy_form['resourcename'] = dummy_form['address_nominal']
++				dummy_form['address'] = dummy_form['resourcename']
+ 		except:
+ 			log.exception('no ipaddr')
+ 			return (False, { 'errors': [ 'No IP address was given' ]})
+
+commit 308119c16fe1db3eeae1479780c7b92ac1df99c5
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Tue Aug 3 18:35:30 2010 -0400
+
+    Add labels (per Lon's suggestion) to the resource forms so it's clear what you're doing when constructing/editing a service
+
+diff --git a/luci/templates/resource_list.html b/luci/templates/resource_list.html
+index 3937400..552a79a 100644
+--- a/luci/templates/resource_list.html
++++ b/luci/templates/resource_list.html
+@@ -13,6 +13,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('address')} or {}" />
+ 	<input name="type" type="hidden" value="ip" />
+ 
++	<h3>IP Address</h3>
+ 	 <table class="formtable">
+ 		<tr>
+ 			<td>IP address</td>
+@@ -56,6 +57,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="fs" />
+ 
++	<h3>Filesystem</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -154,6 +156,15 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="clusterfs" />
+ 
++	<py:choose test="tmpl_context.cluster.get_version()">
++		<py:when test="2">
++			<h3>GFS/GFS2</h3>
++		</py:when>
++		<py:otherwise>
++			<h3>GFS2</h3>
++		</py:otherwise>
++	</py:choose>
++
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -237,6 +248,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="netfs" />
+ 
++	<h3>NFS/CIFS Mount</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -315,6 +327,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="nfsexport" />
+ 
++	<h3>NFS v3 Export</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -336,6 +349,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="nfsserver" />
+ 
++	<h3>NFS Server</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -364,6 +378,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="nfsclient" />
+ 
++	<h3>NFS Client</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -406,6 +421,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="smb" />
+ 
++	<h3>Samba Server</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -462,6 +478,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="script" />
+ 
++	<h3>Script</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -490,6 +507,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="apache" />
+ 
++	<h3>Apache</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -542,6 +560,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="mysql" />
+ 
++	<h3>MySQL</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -599,6 +618,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="lvm" />
+ 
++	<h3>HA LVM</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -641,6 +661,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="openldap" />
+ 
++	<h3>Open LDAP</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -692,6 +713,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="postgres-8" />
+ 
++	<h3>PostgreSQL 8</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -743,6 +765,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="tomcat-5" />
+ 
++	<h3>Tomcat 5</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -802,6 +825,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="tomcat-6" />
+ 
++	<h3>Tomcat 6</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -848,6 +872,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('InstanceName')} or {}" />
+ 	<input name="type" type="hidden" value="SAPInstance" />
+ 
++	<h3>SAP Instance</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>SAP instance name</td>
+@@ -948,6 +973,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('SID')} or {}" />
+ 	<input name="type" type="hidden" value="SAPDatabase" />
+ 
++	<h3>SAP Database</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>SAP Database name</td>
+@@ -1094,6 +1120,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="ASEHAagent" />
+ 
++	<h3>Sybase ASE Failover Instance</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Instance Name</td>
+@@ -1195,6 +1222,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="oracledb" />
+ 
++	<h3>Oracle 10g/11g Failover Instance</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Instance name (SID) of Oracle instance</td>
+@@ -1260,6 +1288,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="named" />
+ 
++	<h3>Named</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>
+@@ -1311,6 +1340,7 @@
+ 		py:attrs="res and {'value':res.getAttribute('name')} or {}" />
+ 	<input name="type" type="hidden" value="drbd" />
+ 
++	<h3>DRBD</h3>
+ 	<table class="formtable">
+ 		<tr>
+ 			<td>Name</td>

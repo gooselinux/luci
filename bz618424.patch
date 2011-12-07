@@ -1,0 +1,20 @@
+commit 29bea75632212310ab477b819106415dca9748f3
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Tue Jul 27 15:10:58 2010 -0500
+
+    It's now possible to remove nodes in node add or create cluster dialog
+
+diff --git a/luci/public/js/shared.js b/luci/public/js/shared.js
+index bf8d918..cdc5a7a 100644
+--- a/luci/public/js/shared.js
++++ b/luci/public/js/shared.js
+@@ -49,7 +49,8 @@ function add_system_row(form) {
+     $(input_elems).attr('name',
+         function() { return this.name + num_nodes; });
+     var img_elem = $('img', $(new_elem));
+-    $(img_elem).attr('onclick', '$(\'#' + new_id + '\').remove()');
++    $(img_elem).click(
++	function() { $('#'+new_id).remove(); });
+     $('.add_node_button_row', $(form)).before($(new_elem));
+     if (form.allSameCheckBox.checked == true) { allPasswdsSame(form); }
+ }

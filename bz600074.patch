@@ -1,0 +1,37 @@
+commit edaf98f0b32b8981f41f14e7a6f92fccac976dd2
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Thu Jun 10 02:52:39 2010 -0400
+
+    Fix rhbz #600074: Display error on the resource list page
+
+diff --git a/luci/templates/resource.html b/luci/templates/resource.html
+index 585537a..14df59d 100644
+--- a/luci/templates/resource.html
++++ b/luci/templates/resource.html
+@@ -31,9 +31,9 @@
+ 	<tr>
+ 	  <th class="checkbox"></th>
+ 	  <th class="main_id">Name/IP</th>
+-	  <th class="main_id">Type</th>
+-	  <th class="main_id">In Use</th>
+-      </tr>
++	  <th class="resource_tlist_type">Type</th>
++	  <th class="resource_tlist_used">In Use</th>
++    </tr>
+     </thead>
+     <tbody>
+      <!--! List all the resources. -->
+@@ -49,10 +49,10 @@
+         <td class="main_id">
+             <a href="${tg.url(base_url + '/' + entity_name + '.html')}"><span class="entity_ok">${entity_name}</span></a>
+         </td>
+-        <td class="main_id">
+-            <a href="${tg.url(base_url + '/' + entity_name + '.html')}"><span class="entity_ok">${resource_data.getResourceType()}</span></a>
++        <td class="resource_tlist_type">
++            ${resource_data.getResourceType()}
+         </td>
+-        <td>
++        <td class="resource_tlist_used">
+     	    <py:choose test="refcount">
+ 	            <py:when test="1">
+ 	                No

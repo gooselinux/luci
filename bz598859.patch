@@ -1,0 +1,28 @@
+commit fb3176c6263664c2d081331ae808c86415a06c36
+Author: Ryan McCabe <ryan@chipotle.numb.lan>
+Date:   Thu Jun 10 00:37:23 2010 -0400
+
+    Fix rhbz #598859: Adding fence_xvm fence device through luci interface throws TypeError Traceback
+
+diff --git a/luci/widget_validators/validate_fence.py b/luci/widget_validators/validate_fence.py
+index 9e452e0..bedce1d 100644
+--- a/luci/widget_validators/validate_fence.py
++++ b/luci/widget_validators/validate_fence.py
+@@ -268,7 +268,7 @@ def val_bullpap_fd(fencedev, fence_name, **kw):
+ 	errors = config_fence_attr(params, fencedev, fence_name, **kw)
+ 	return errors
+ 
+-def val_noop_fd(dummy, **kw):
++def val_noop_fd(fencedev, fence_name, **kw):
+ 	return []
+ 
+ # non-shared devices
+@@ -849,7 +849,7 @@ def val_intelmodular_fi(fenceinst, parent_name, **kw):
+ 	errors = config_fence_attr(params, fenceinst, parent_name, **kw)
+ 	return errors
+ 
+-def val_noop_fi(dummy, **kw):
++def val_noop_fi(fenceinst, parent_name, **kw):
+ 	return []
+ 
+ FI_VALIDATE = {

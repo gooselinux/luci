@@ -1,0 +1,433 @@
+diff -ur a/luci/templates/fence_devices.html b/luci/templates/fence_devices.html
+--- a/luci/templates/fence_devices.html	2010-07-29 21:36:52.000000000 -0400
++++ b/luci/templates/fence_devices.html	2010-07-29 21:34:07.000000000 -0400
+@@ -24,6 +24,13 @@
+ 			</td>
+ 		</tr>
+ 		<tr>
++			<td>IP port (optional)</td>
++			<td>
++				<input name="ipport" type="text" class="text"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('ipport')} or {}"/>
++			</td>
++		</tr>
++		<tr>
+ 			<td>Login</td>
+ 			<td>
+ 				<input name="login" type="text" class="text"
+@@ -89,6 +96,13 @@
+ 			</td>
+ 		</tr>
+ 		<tr>
++			<td>UDP/TCP port (optional, defaults to 161)</td>
++			<td>
++				<input name="udpport" type="text" class="text"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('udpport')} or {}"/>
++			</td>
++		</tr>
++		<tr>
+ 			<td>Login</td>
+ 			<td>
+ 				<input name="login" type="text" class="text"
+@@ -290,6 +304,13 @@
+ 					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('ipaddr')} or {}"/>
+ 			</td>
+ 		</tr>
++        <tr>
++			<td>IP port (optional)</td>
++			<td>
++				<input name="ipport" type="text" class="text"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('ipport')} or {}"/>
++			</td>
++		</tr>
+ 		<tr>
+ 			<td>Login</td>
+ 			<td>
+@@ -420,6 +441,13 @@
+ 					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('ipaddr')} or {}"/>
+ 			</td>
+ 		</tr>
++        <tr>
++			<td>IP port (optional)</td>
++			<td>
++				<input name="ipport" type="text" class="text"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('ipport')} or {}"/>
++			</td>
++		</tr>
+ 		<tr>
+ 			<td>Login</td>
+ 			<td>
+@@ -628,6 +656,13 @@
+ 			</td>
+ 		</tr>
+ 		<tr>
++			<td>IP port (optional)</td>
++			<td>
++				<input name="ipport" type="text" class="text"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('ipport')} or {}"/>
++			</td>
++		</tr>
++		<tr>
+ 			<td>Login</td>
+ 			<td>
+ 				<input name="login" type="text" class="text"
+@@ -1052,6 +1087,13 @@
+ 			</td>
+ 		</tr>
+ 		<tr>
++			<td>IP port (optional)</td>
++			<td>
++				<input name="ipport" type="text" class="text"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('ipport')} or {}"/>
++			</td>
++		</tr>
++		<tr>
+ 			<td>Login</td>
+ 			<td>
+ 				<input name="login" type="text" class="text"
+@@ -1204,6 +1246,13 @@
+ 			</td>
+ 		</tr>
+ 		<tr>
++			<td>IP port (optional)</td>
++			<td>
++				<input name="ipport" type="text" class="text"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('ipport')} or {}"/>
++			</td>
++		</tr>
++		<tr>
+ 			<td>Login</td>
+ 			<td>
+ 				<input name="login" type="text" class="text"
+@@ -1545,6 +1594,13 @@
+ 			</td>
+ 		</tr>
+ 		<tr>
++			<td>UDP/TCP port (optional, defaults to 161)</td>
++			<td>
++				<input name="udpport" type="text" class="text"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('udpport')} or {}"/>
++			</td>
++		</tr>
++		<tr>
+ 			<td>Login</td>
+ 			<td>
+ 				<input name="login" type="text" class="text"
+@@ -1722,6 +1778,13 @@
+ 			</td>
+ 		</tr>
+ 		<tr>
++			<td>IP port (optional)</td>
++			<td>
++				<input name="ipport" type="text" class="text"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('ipport')} or {}"/>
++			</td>
++		</tr>
++		<tr>
+ 			<td>Login</td>
+ 			<td>
+ 				<input name="login" type="text" class="text"
+@@ -1879,6 +1942,13 @@
+ 			</td>
+ 		</tr>
+ 		<tr>
++			<td>UDP/TCP port (optional, defaults to 161)</td>
++			<td>
++				<input name="udpport" type="text" class="text"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('udpport')} or {}"/>
++			</td>
++		</tr>
++		<tr>
+ 			<td>Login</td>
+ 			<td>
+ 				<input name="login" type="text" class="text"
+@@ -2023,6 +2093,13 @@
+ 			</td>
+ 		</tr>
+ 		<tr>
++			<td>IP port (optional)</td>
++			<td>
++				<input name="ipport" type="text" class="text"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('ipport')} or {}"/>
++			</td>
++		</tr>
++		<tr>
+ 			<td>Login</td>
+ 			<td>
+ 				<input name="login" type="text" class="text"
+@@ -2108,6 +2185,13 @@
+ 			</td>
+ 		</tr>
+ 		<tr>
++			<td>UDP/TCP port (optional, defaults to 161)</td>
++			<td>
++				<input name="udpport" type="text" class="text"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('udpport')} or {}"/>
++			</td>
++		</tr>
++		<tr>
+ 			<td>Login</td>
+ 			<td>
+ 				<input name="login" type="text" class="text"
+@@ -2482,6 +2566,13 @@
+ 			</td>
+ 		</tr>
+ 		<tr>
++			<td>UDP/TCP port (optional, defaults to 161)</td>
++			<td>
++				<input name="udpport" type="text" class="text"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('udpport')} or {}"/>
++			</td>
++		</tr>
++		<tr>
+ 			<td>Login</td>
+ 			<td>
+ 				<input name="login" type="text" class="text"
+diff -ur a/luci/widget_validators/validate_fence.py b/luci/widget_validators/validate_fence.py
+--- a/luci/widget_validators/validate_fence.py	2010-07-29 21:36:52.000000000 -0400
++++ b/luci/widget_validators/validate_fence.py	2010-07-29 21:34:07.000000000 -0400
+@@ -97,6 +97,7 @@
+ def val_apc_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
++ 		('ipport', False),
+ 		('login', True),
+ 		('passwd', False),
+ 		('passwd_script', False),
+@@ -108,6 +109,7 @@
+ def val_wti_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
++ 		('ipport', False),
+ 		('login', True),
+ 		('cmd_prompt', False),
+ 		('passwd', False),
+@@ -185,6 +187,7 @@
+ def val_sanbox2_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
++ 		('ipport', False),
+ 		('login', True),
+ 		('cmd_prompt', False),
+ 		('passwd', False),
+@@ -198,6 +201,7 @@
+ def val_bladecenter_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
++ 		('ipport', False),
+ 		('login', True),
+ 		('passwd', False),
+ 		('passwd_script', False),
+@@ -276,6 +280,7 @@
+ def val_rsa_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
++ 		('ipport', False),
+ 		('login', True),
+ 		('secure', False),
+ 		('identity_file', False),
+@@ -315,6 +320,7 @@
+ def val_drac5_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
++ 		('ipport', False),
+ 		('login', True),
+ 		('module_name', True),
+ 		('cmd_prompt', False),
+@@ -427,6 +433,7 @@
+ def val_ibmblade_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
++ 		('udpport', False),
+ 		('login', True),
+ 		('passwd', False),
+ 		('passwd_script', False),
+@@ -446,6 +453,7 @@
+ def val_ifmib_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
++ 		('udpport', False),
+ 		('login', True),
+ 		('passwd', False),
+ 		('passwd_script', False),
+@@ -465,6 +473,7 @@
+ def val_cisco_mds_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
++ 		('udpport', False),
+ 		('login', True),
+ 		('passwd', False),
+ 		('passwd_script', False),
+@@ -492,6 +501,7 @@
+ def val_apc_snmp_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
++ 		('udpport', False),
+ 		('login', True),
+ 		('passwd', False),
+ 		('passwd_script', False),
+@@ -511,6 +521,7 @@
+ def val_intelmodular_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
++ 		('udpport', False),
+ 		('login', True),
+ 		('passwd', False),
+ 		('passwd_script', False),
+@@ -529,6 +540,7 @@
+ def val_ilo_mp_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
++ 		('ipport', False),
+ 		('login', True),
+ 		('passwd', False),
+ 		('passwd_script', False),
+@@ -544,6 +556,7 @@
+ def val_ilo_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('ipaddr', True),
++ 		('ipport', False),
+ 		('login', True),
+ 		('passwd', False),
+ 		('passwd_script', False),
+@@ -554,41 +567,43 @@
+ 	return errors
+ 
+ FD_VALIDATE = {
+-	'fence_apc':			val_apc_fd,
++	'fence_alom':			val_alom_fd,
+ 	'fence_apc_snmp':		val_apc_snmp_fd,
+-	'fence_wti':			val_wti_fd,
+-	'fence_brocade':		val_brocade_fd,
+-	'fence_vixel':			val_vixel_fd,
+-	'fence_gnbd':			val_gnbd_fd,
+-	'fence_sanbox2':		val_sanbox2_fd,
++	'fence_apc':			val_apc_fd,
+ 	'fence_bladecenter':	val_bladecenter_fd,
+-	'fence_mcdata':			val_mcdata_fd,
+-	'fence_egenera':		val_egenera_fd,
++	'fence_brocade':		val_brocade_fd,
+ 	'fence_bullpap':		val_bullpap_fd,
+-	'fence_xvm':			val_noop_fd,
+-	'fence_virt':			val_virt_fd,
+-	'fence_virsh':			val_virsh_fd,
+-	'fence_vmware':			val_vmware_fd,
+-	'fence_scsi':			val_scsi_fd,
+-	'fence_lpar':			val_lpar_fd,
+-	'fence_ilo':			val_ilo_fd,
++	'fence_cisco_mds':		val_cisco_mds_fd,
++	'fence_cpint':			val_cpint_fd,
++	'fence_drac5':			val_drac5_fd,
++	'fence_drac':			val_drac_fd,
++	'fence_egenera':		val_egenera_fd,
++	'fence_eps':			val_eps_fd,
++	'fence_gnbd':			val_gnbd_fd,
++	'fence_ibmblade':		val_ibmblade_fd,
++	'fence_ifmib':			val_ifmib_fd,
+ 	'fence_ilo_mp':			val_ilo_mp_fd,
++	'fence_ilo':			val_ilo_fd,
+ 	'fence_intelmodular':	val_intelmodular_fd,
+ 	'fence_ipmilan':		val_ipmilan_fd,
+-	'fence_drac':			val_drac_fd,
+-	'fence_drac5':			val_drac5_fd,
+-	'fence_eps':			val_eps_fd,
+-	'fence_alom':			val_alom_fd,
+ 	'fence_ldom':			val_ldom_fd,
++	'fence_lpar':			val_lpar_fd,
++	'fence_manual':			val_noop_fd,
++	'fence_mcdata':			val_mcdata_fd,
+ 	'fence_rackswitch':		val_rackswitch_fd,
+-	'fence_xcat':			val_xcat_fd,
+-	'fence_zvm':			val_zvm_fd,
+-	'fence_cisco_mds':		val_cisco_mds_fd,
+-	'fence_ifmib':			val_ifmib_fd,
++	'fence_rps10':			val_rps10_fd,
+ 	'fence_rsa':			val_rsa_fd,
+ 	'fence_rsb':			val_rsb_fd,
+-	'fence_rps10':			val_rps10_fd,
+-	'fence_manual':			val_noop_fd
++	'fence_sanbox2':		val_sanbox2_fd,
++	'fence_scsi':			val_scsi_fd,
++	'fence_virsh':			val_virsh_fd,
++	'fence_virt':			val_virt_fd,
++	'fence_vixel':			val_vixel_fd,
++	'fence_vmware':			val_vmware_fd,
++	'fence_wti':			val_wti_fd,
++	'fence_xcat':			val_xcat_fd,
++	'fence_xvm':			val_noop_fd,
++	'fence_zvm':			val_zvm_fd,
+ }
+ 
+ def validate_fencedevice(model, fencedev, **kw):
+@@ -853,48 +868,43 @@
+ 	return []
+ 
+ FI_VALIDATE = {
+-	'fence_apc':			val_apc_fi,
++	'fence_alom':			val_noop_fi,
+ 	'fence_apc_snmp':		val_apc_snmp_fi,
+-	'fence_wti':			val_wti_fi,
+-	'fence_brocade':		val_brocade_fi,
+-	'fence_vixel':			val_vixel_fi,
+-	'fence_gnbd':			val_gnbd_fi,
+-	'fence_sanbox2':		val_sanbox2_fi,
++	'fence_apc':			val_apc_fi,
+ 	'fence_bladecenter':	val_bladecenter_fi,
+-	'fence_mcdata':			val_mcdata_fi,
+-	'fence_egenera':		val_egenera_fi,
++	'fence_brocade':		val_brocade_fi,
+ 	'fence_bullpap':		val_bullpap_fi,
+-	'fence_xvm':			val_xvm_fi,
+-	'fence_virt':			val_virt_fi,
+-	'fence_virsh':			val_virsh_fi,
+-	'fence_vmware':			val_vmware_fi,
+-	'fence_rackswitch':		val_rackswitch_fi,
+-	'fence_ldom':			val_ldom_fi,
+ 	'fence_cisco_mds':		val_cisco_mds_fi,
++	'fence_cpint':			val_noop_fi,
++	'fence_drac5':			val_noop_fi,
++	'fence_drac':			val_noop_fi,
++	'fence_egenera':		val_egenera_fi,
+ 	'fence_eps':			val_eps_fi,
++	'fence_gnbd':			val_gnbd_fi,
+ 	'fence_ibmblade':		val_ibmblade_fi,
+ 	'fence_ifmib':			val_ifmib_fi,
+-	'fence_intelmodular':	val_intelmodular_fi,
+-	'fence_lpar':			val_lpar_fi,
++	'fence_ilo_mp':			val_noop_fi,
+ 	'fence_ilo':			val_noop_fi,
++	'fence_intelmodular':	val_intelmodular_fi,
+ 	'fence_ipmilan':		val_noop_fi,
+-	'fence_drac':			val_noop_fi,
+-	'fence_drac5':			val_noop_fi,
+-	'fence_rsa':			val_noop_fi,
+-	'fence_rsb':			val_noop_fi,
++	'fence_ldom':			val_ldom_fi,
++	'fence_lpar':			val_lpar_fi,
++	'fence_manual':			val_noop_fi,
++	'fence_mcdata':			val_mcdata_fi,
++	'fence_rackswitch':		val_rackswitch_fi,
+ 	'fence_rps10':			val_noop_fi,
+-	'fence_drac':			val_noop_fi,
+-	'fence_drac5':			val_noop_fi,
+-	'fence_ilo':			val_noop_fi,
+-	'fence_ilo_mp':			val_noop_fi,
+ 	'fence_rsa':			val_noop_fi,
+-	'fence_ipmilan':		val_noop_fi,
+-	'fence_alom':			val_noop_fi,
+-	'fence_cpint':			val_noop_fi,
+ 	'fence_rsb':			val_noop_fi,
++	'fence_sanbox2':		val_sanbox2_fi,
++	'fence_scsi':			val_noop_fi,
++	'fence_virsh':			val_virsh_fi,
++	'fence_virt':			val_virt_fi,
++	'fence_vixel':			val_vixel_fi,
++	'fence_vmware':			val_vmware_fi,
++	'fence_wti':			val_wti_fi,
+ 	'fence_xcat':			val_noop_fi,
++	'fence_xvm':			val_xvm_fi,
+ 	'fence_zvm':			val_noop_fi,
+-	'fence_scsi':			val_noop_fi
+ }
+ 
+ def validate_fenceinstance(parent_name, fence_agent, **kw):

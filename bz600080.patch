@@ -1,0 +1,19 @@
+commit fca1cc8b4fc3ce924291e5d85a0fae93729ee707
+Author: Ryan McCabe <ryan@chipotle.numb.lan>
+Date:   Tue Jun 1 00:50:17 2010 -0400
+
+    Fix error in display of nodes joined on the homebase page (was always showing '-')
+
+diff --git a/luci/templates/homebase.html b/luci/templates/homebase.html
+index e60f06e..008e2f8 100644
+--- a/luci/templates/homebase.html
++++ b/luci/templates/homebase.html
+@@ -66,7 +66,7 @@
+ 		      <td class="cluster_tlist_status">Status unknown</td>
+ 		      </py:when>
+ 		      </py:choose>
+-		      <py:choose test="cluster_data and cluster_data.get('model') and cluster_data.get('status')">
++		      <py:choose test="cluster_data and cluster_data.get('model') and cluster_data.get('status') and True">
+     		      <py:when test="True">
+     		        <td class="cluster_tlist_votes">${cluster_data['status'].nodesJoined} of ${len(cluster_data['model'].getNodes())}</td>
+     		      </py:when>

@@ -1,0 +1,25 @@
+commit 65d4560609234b2c56152232301a1f6938e52aa5
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Thu Jul 29 21:54:39 2010 -0400
+
+    Specify the unit of time for post join and post fail delay fields
+    
+    Resolves: rhbz#617602
+
+diff --git a/luci/templates/configure.html b/luci/templates/configure.html
+index 1a14a5e..98bedf6 100644
+--- a/luci/templates/configure.html
++++ b/luci/templates/configure.html
+@@ -73,10 +73,10 @@
+ 	  <form action="${tg.url(configure_cmd)}" method="post">
+ 	    <input type="hidden" name="page" value="Fence"/>
+ 	    <h2>Fence Daemon Properties</h2>
+-	      <div class="row"><label>Post Fail Delay</label>
++	      <div class="row"><label>Post Fail Delay (seconds)</label>
+ 	           <input type="text" class="text" name="post_fail_delay" value="${cluster_data and cluster_data.getFenceDaemonPtr().getAttribute('post_fail_delay')}"/>
+ 	      </div>     
+-	      <div class="row"><label>Post Join Delay</label>
++	      <div class="row"><label>Post Join Delay (seconds)</label>
+ 	        <input type="text" class="text" name="post_join_delay" value="${cluster_data and cluster_data.getFenceDaemonPtr().getAttribute('post_join_delay')}"/>
+           </div>
+           <div class="row" py:if="tmpl_context.cluster.get_version() == 2">

@@ -1,0 +1,39 @@
+commit eff17d3b3366113cceeff3d48f0843bb515482b3
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Thu Jul 8 13:05:13 2010 -0500
+
+    Removed optional paramaters from SCSI fencing configuration page
+
+diff --git a/luci/templates/fence_devices.html b/luci/templates/fence_devices.html
+index 5cbd6cb..f62d868 100644
+--- a/luci/templates/fence_devices.html
++++ b/luci/templates/fence_devices.html
+@@ -827,6 +827,7 @@
+ 					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('node')} or {}"/>
+ 			</td>
+ 		</tr>
++		<!--
+ 		<tr>
+ 			<td>Devices to be used for action</td>
+ 			<td>
+@@ -849,6 +850,7 @@
+ 				<label class="choice">Use APTPL flag</label>
+ 			</td>
+ 		</tr>
++		-->
+ 	</table>
+ 
+ 	<py:if test="cur_fencedev">
+diff --git a/luci/widget_validators/validate_fence.py b/luci/widget_validators/validate_fence.py
+index 6ea9861..11c6e48 100644
+--- a/luci/widget_validators/validate_fence.py
++++ b/luci/widget_validators/validate_fence.py
+@@ -235,7 +235,7 @@ def val_vmware_fd(fencedev, fence_name, **kw):
+ def val_scsi_fd(fencedev, fence_name, **kw):
+ 	params = (
+ 		('node', True),
+-		('devices', True),
++		('devices', False),
+ 		('key', False),
+ 		('aptpl', False),
+ 	)

@@ -1,0 +1,194 @@
+commit 54e0a9f39ab3fe601dc783f428f5c50cea06c22a
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Fri Jun 11 15:03:25 2010 -0400
+
+    Show only the fence device types that are available for RHEL5 clusters
+
+diff --git a/luci/templates/fence_devices.html b/luci/templates/fence_devices.html
+index 0ad1a8b..11b0418 100644
+--- a/luci/templates/fence_devices.html
++++ b/luci/templates/fence_devices.html
+@@ -846,7 +846,7 @@
+ 			<td>
+ 				<input type="checkbox" class="checkbox" name="aptpl"
+ 					py:attrs="cur_fencedev and cur_fencedev.getAttribute('aptpl') and {'checked': 'checked'}"/>
+-				<label class="choice">Use APTPL flag</label>	
++				<label class="choice">Use APTPL flag</label>
+ 			</td>
+ 		</tr>
+ 	</table>
+@@ -1282,21 +1282,21 @@
+ 					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('passwd_script')} or {}"/>
+ 			</td>
+ 		</tr>
+-        <tr>
+-            <td>SSH</td>
+-		    <td>
+-			    <input type="checkbox" class="checkbox" name="secure"
++		<tr>
++			<td>SSH</td>
++			<td>
++				<input type="checkbox" class="checkbox" name="secure"
+ 					py:attrs="cur_fencedev and cur_fencedev.getAttribute('secure') and {'checked': 'checked'}"/>
+-				<label class="choice">Use SSH</label>	
+-			</td>		    
+-        </tr>
++				<label class="choice">Use SSH</label>
++			</td>		
++		</tr>
+ 		<tr>
+-		   <td>Path to SSH identity file</td>
+-		   <td>
+-		   	   <input type="text" class="text" name="identity_file"
+-		   		py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('identity_file')} or {}"/>
+-		   </td>
+-		</tr>   
++			<td>Path to SSH identity file</td>
++			<td>
++				<input type="text" class="text" name="identity_file"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('identity_file')} or {}"/>
++			</td>
++		</tr>
+ 		<tr>
+ 			<td>Force command prompt</td>
+ 			<td>
+@@ -1800,21 +1800,21 @@
+ 					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('passwd_script')} or {}"/>
+ 			</td>
+ 		</tr>
+-        <tr>
+-            <td>SSH</td>
+-		    <td>
+-			    <input type="checkbox" class="checkbox" name="secure"
++		<tr>
++			<td>SSH</td>
++			<td>
++				<input type="checkbox" class="checkbox" name="secure"
+ 					py:attrs="cur_fencedev and cur_fencedev.getAttribute('secure') and {'checked': 'checked'}"/>
+-				<label class="choice">Use SSH</label>	
+-			</td>		    
+-        </tr>
++				<label class="choice">Use SSH</label>
++			</td>		
++		</tr>
+ 		<tr>
+-		   <td>Path to SSH identity file</td>
+-		   <td>
+-		   	   <input type="text" class="text" name="identity_file"
+-		   		py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('identity_file')} or {}"/>
+-		   </td>
+-		</tr>        
++			<td>Path to SSH identity file</td>
++			<td>
++				<input type="text" class="text" name="identity_file"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('identity_file')} or {}"/>
++			</td>
++		</tr>
+ 		<tr>
+ 			<td>Module name</td>
+ 			<td>
+@@ -2101,21 +2101,21 @@
+ 					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('passwd_script')} or {}"/>
+ 			</td>
+ 		</tr>
+-        <tr>
+-            <td>SSH</td>
+-		    <td>
+-			    <input type="checkbox" class="checkbox" name="secure"
++		<tr>
++			<td>SSH</td>
++			<td>
++				<input type="checkbox" class="checkbox" name="secure"
+ 					py:attrs="cur_fencedev and cur_fencedev.getAttribute('secure') and {'checked': 'checked'}"/>
+-				<label class="choice">Use SSH</label>	
+-			</td>		    
+-        </tr>
++				<label class="choice">Use SSH</label>
++			</td>		
++		</tr>
+ 		<tr>
+-		   <td>Path to SSH identity file</td>
+-		   <td>
+-		   	   <input type="text" class="text" name="identity_file"
+-		   		py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('identity_file')} or {}"/>
+-		   </td>
+-		</tr>   
++			<td>Path to SSH identity file</td>
++			<td>
++				<input type="text" class="text" name="identity_file"
++					py:attrs="cur_fencedev and {'value': cur_fencedev.getAttribute('identity_file')} or {}"/>
++			</td>
++		</tr>
+ 		<tr>
+ 			<td>Force command prompt</td>
+ 			<td>
+@@ -2719,10 +2719,10 @@ ${fence_virsh(None,0)}
+ 			<option name="fence_drac" value="fence_drac">Dell DRAC</option>
+ 			<option name="fence_drac5" value="fence_drac5">Dell DRAC 5</option> <!-- needs work -->
+ 			<option name="fence_egenera" value="fence_egenera">Egenera SAN Controller</option>
+-			<option name="fence_eps" value="fence_eps">ePowerSwitch</option>
+ 
+ 			<py:choose test="tmpl_context.cluster_version">
+ 				<py:when test="3">
++					<option name="fence_eps" value="fence_eps">ePowerSwitch</option>
+ 					<option name="fence_virt" value="fence_virt">Fence virt</option>
+ 					<option name="fence_xvm" value="fence_xvm">Fence virt (Multicast Mode)</option>
+ 				</py:when>
+@@ -2731,31 +2731,42 @@ ${fence_virsh(None,0)}
+ 				</py:otherwise>
+ 			</py:choose>
+ 
+-			<option name="fence_rsb" value="fence_rsb">Fujitsu Siemens RemoteView Service Board</option>			
++			<option name="fence_rsb" value="fence_rsb">Fujitsu Siemens RemoteView Service Board</option>
+ 			<option name="fence_ilo" value="fence_ilo">HP iLO Device</option>
+ 			<option name="fence_ilo_mp" value="fence_ilo_mp">HP iLO MP</option> <!-- needs work -->
+ 			<option name="fence_bladecenter" value="fence_bladecenter">IBM BladeCenter</option>
+-			<option name="fence_ibmblade" value="fence_ibmblade">IBM BladeCenter SNMP</option>
+-			<option name="fence_rsa" value="fence_rsa">IBM RSA II Device</option>	<!-- needs work -->		
+-			<option name="fence_cpint" value="fence_cpint">IBM S/390 cpint</option>	
+-			<option name="fence_zvm" value="fence_zvm">IBM S/390 z/VM</option>								
+-			<option name="fence_ifmib" value="fence_ifmib">IF MIB</option>
+-			<option name="fence_intelmodular" value="fence_intelmodular">Intel Modular</option>	
++			<option py:if="tmpl_context.cluster_version == 3" name="fence_ibmblade" value="fence_ibmblade">IBM BladeCenter SNMP</option>
++			<option name="fence_rsa" value="fence_rsa">IBM RSA II Device</option>	<!-- needs work -->
++
++			<py:if test="tmpl_context.cluster_version == 3">
++				<option name="fence_cpint" value="fence_cpint">IBM S/390 cpint</option>
++				<option name="fence_zvm" value="fence_zvm">IBM S/390 z/VM</option>
++				<option name="fence_ifmib" value="fence_ifmib">IF MIB</option>
++				<option name="fence_intelmodular" value="fence_intelmodular">Intel Modular</option>
++			</py:if>
++
+ 			<option name="fence_ipmilan" value="fence_ipmilan">IPMI Lan</option>
+ 			<option name="fence_lpar" value="fence_lpar">LPAR Fencing</option>
+-			<option name="fence_mcdata" value="fence_mcdata">McData SAN Switch</option>									
++			<option name="fence_mcdata" value="fence_mcdata">McData SAN Switch</option>
+ 			<option name="fence_sanbox2" value="fence_sanbox2">QLogic SANbox2</option>
+-			<option name="fence_rackswitch" value="fence_rackswitch">RackSaver RackSwitch</option>
+-			<option name="fence_rps10" value="fence_rps10">RPS10 Serial Switch</option>
++			<option py:if="tmpl_context.cluster_version == 3" name="fence_rackswitch" value="fence_rackswitch">RackSaver RackSwitch</option>
++			<option py:if="tmpl_context.cluster_version != 3" name="fence_rps10" value="fence_rps10">RPS10 Serial Switch</option>
+ 			<option name="fence_scsi" value="fence_scsi">SCSI Reservation Fencing</option>
+-			<option name="fence_alom" value="fence_alom">Sun ALOM</option>
+-			<option name="fence_ldom" value="fence_ldom">Sun LDOM</option>			
++
++			<py:if test="tmpl_context.cluster_version == 3">
++				<option name="fence_alom" value="fence_alom">Sun ALOM</option>
++				<option name="fence_ldom" value="fence_ldom">Sun LDOM</option>
++			</py:if>
++
+ 			<option name="fence_virsh" value="fence_virsh">virsh fence agent</option>
+ 			<option name="fence_vixel" value="fence_vixel">Vixel SAN Switch</option>
+ 			<option name="fence_vmware" value="fence_vmware">VMware Fencing</option>
+-			<option name="fence_wti" value="fence_wti">WTI Power Switch</option>			
+-			<option name="fence_xcat" value="fence_xcat">xCAT</option>
+-			<option name="fence_zvm" value="fence_zvm">s390 z/VM</option>
++			<option name="fence_wti" value="fence_wti">WTI Power Switch</option>
++
++			<py:if test="tmpl_context.cluster_version == 3">
++				<option name="fence_xcat" value="fence_xcat">xCAT</option>
++				<option name="fence_zvm" value="fence_zvm">s390 z/VM</option>
++			</py:if>
+ 		</select>
+ 	</div>
+ 	</div>

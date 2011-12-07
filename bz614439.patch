@@ -1,0 +1,49 @@
+commit 66398c013010fa1b98968b038e4667704a0ebde5
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Fri Jul 16 16:28:17 2010 -0500
+
+    Fixed issue with GFS2 resource types on RHEL6 clusters (bz#614439)
+    
+    - Resource type is now listed as GFS2 when it's a GFS2 filesystem
+    - You can only select GFS2 filesystems on RHEL6 clusters
+
+diff --git a/luci/lib/ClusterConf/Clusterfs.py b/luci/lib/ClusterConf/Clusterfs.py
+index 9d03f76..8516954 100644
+--- a/luci/lib/ClusterConf/Clusterfs.py
++++ b/luci/lib/ClusterConf/Clusterfs.py
+@@ -18,3 +18,10 @@ class Clusterfs(BaseResource):
+     self.resource_type = RESOURCE_TYPE
+     #only fstype supported right now is gfs
+     #self.addAttribute('fstype', 'gfs')
++
++# If it's a GFS2 filesystem we want to make sure
++# the resource type is GFS2, not GFS
++  def addAttribute(self, name, value):
++    if name == "fstype" and value == "gfs2":
++        self.resource_type = "GFS2"
++    BaseResource.addAttribute(self, name, value)
+diff --git a/luci/templates/resource_list.html b/luci/templates/resource_list.html
+index e7dad7f..ff92662 100644
+--- a/luci/templates/resource_list.html
++++ b/luci/templates/resource_list.html
+@@ -167,10 +167,18 @@
+ 			<td>Filesystem type</td>
+ 			<td>
+ 				<select name="fstype" class="serviceformselect">
++				  <py:choose test="tmpl_context.cluster_version">
++				  <py:when test="3">
++					<option value="gfs2"
++						py:attrs="res and res.getAttribute('fstype') == 'gfs2' and {'selected':'selected'} or {}">GFS2</option>
++				  </py:when>
++				  <py:otherwise>
+ 					<option value="gfs"
+-						py:attrs="res and res.getAttribute('fstype') == 'GFS' and {'selected':'selected'} or {}">GFS</option>
++						py:attrs="res and res.getAttribute('fstype') == 'gfs' and {'selected':'selected'} or {}">GFS</option>
+ 					<option value="gfs2"
+-						py:attrs="res and res.getAttribute('fstype') == 'GFS2' and {'selected':'selected'} or {}">GFS2</option>
++						py:attrs="res and res.getAttribute('fstype') == 'gfs2' and {'selected':'selected'} or {}">GFS2</option>
++				  </py:otherwise>
++				  </py:choose>
+ 				</select>
+ 			</td>
+ 		</tr>

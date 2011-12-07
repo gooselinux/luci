@@ -1,0 +1,141 @@
+commit 9e77f7696068ebea41ac2b954dbdbe7e6947819b
+Author: Ryan McCabe <ryan@chipotle.numb.lan>
+Date:   Tue Jun 1 01:14:17 2010 -0400
+
+    Fix editing of global resources
+
+diff --git a/luci/controllers/cluster.py b/luci/controllers/cluster.py
+index fce9342..601b79f 100644
+--- a/luci/controllers/cluster.py
++++ b/luci/controllers/cluster.py
+@@ -22,7 +22,7 @@ import luci.lib.ricci_helpers as rh
+ import luci.widget_validators.validate_cluster_prop as vcp
+ from luci.widget_validators.validate_create_cluster_form import validate_create_cluster_form 
+ from luci.widget_validators.validate_fence import validateNewFenceDevice, validateFenceDevice
+-from luci.widget_validators.validate_resource import create_resource, validate_clusvc_form 
++from luci.widget_validators.validate_resource import validate_clusvc_form, validate_resource_form
+ 
+ import logging
+ log = logging.getLogger(__name__)
+@@ -260,7 +260,7 @@ class IndividualClusterController(BaseController):
+             if obj_name:
+                 cur_list = [ obj_name ]
+ 
+-        if len(cur_list) < 1 and command != 'Create':
++        if len(cur_list) < 1 and command not in ('Create', 'Edit'):
+             flash(_('No resources were selected'),
+                 status='error')
+             redirect(tmpl_context.cluster_url)
+@@ -273,11 +273,24 @@ class IndividualClusterController(BaseController):
+                 cmodel.deleteResource(i)
+             cmodel.setModified()
+             rh.update_cluster_conf(cmodel)
+-        elif command == "Create":
+-            res = create_resource(kw["type"], cmodel, **kw)
+-            cmodel.getResourcesPtr().addChild(res)
+-            cmodel.setModified(True)
+-            rh.update_cluster_conf(cmodel)
++        elif command in ("Create", "Edit"):
++            if command == 'Create':
++                cur_action = _('Created')
++            else:
++                cur_action = _('Edited')
++            vret = validate_resource_form(cmodel, **kw)
++            if vret[0] is True:
++                res_name = kw.get('resourcename')
++                log.info('User "%s" %s global resource "%s" in cluster "%s"'
++                    % (self.username, cur_action, res_name, self.name))
++                flash(_('%s global resource "%s"') % (cur_action, res_name))
++                cmodel.setModified(True)
++                rh.update_cluster_conf(cmodel)
++                redirect('%s/%s' % (tmpl_context.cluster_url, res_name))
++            else:
++                msgs = vret[1].get('errors')
++                if msgs and len(msgs) > 0:
++                    flash(', '.join(msgs), status="error")
+             redirect(tmpl_context.cluster_url)
+         else:
+             log.error('User "%s" submitted unknown command "%s" for resource "%s" from cluster "%s"' % (self.username, command, ', '.join(cur_list), self.name))
+diff --git a/luci/templates/resource.html b/luci/templates/resource.html
+index bcc4a01..47e721c 100644
+--- a/luci/templates/resource.html
++++ b/luci/templates/resource.html
+@@ -93,11 +93,15 @@
+     <div class="details_section">
+       <!--a href="${tg.url(cmd_url + '/service')}" class="float_button">Create New Resource in this Service</a-->
+       <div class="details_inner">
+-	<?python
+-	  resource = cluster_data.getResourceByName(name)
+-	  resource_func = '%s_resource' % resource.getTagName().replace('-', '')
+-	?>
+-	${vars()["__data__"][resource_func](resource, None, None, 0)}
++       <form name="add_resource_dialog" method="post" action="${tg.url(resources_cmd + '?command=Edit')}">
++        <input type="hidden" name="edit" value="1"/>
++         <?python
++            resource = cluster_data.getResourceByName(name)
++            resource_func = '%s_resource' % resource.getTagName().replace('-', '')
++         ?>
++         ${vars()["__data__"][resource_func](resource, None, None, 0)}
++         <div class="row"><input type="submit" class="button formsubmit blue" value="Apply"/></div>
++       </form>
+       </div>
+     </div>
+ 
+diff --git a/luci/widget_validators/validate_resource.py b/luci/widget_validators/validate_resource.py
+index 54e3f16..25b251d 100644
+--- a/luci/widget_validators/validate_resource.py
++++ b/luci/widget_validators/validate_resource.py
+@@ -20,14 +20,13 @@ from luci.lib.ClusterConf.OpenLDAP import OpenLDAP
+ from luci.lib.ClusterConf.LVM import LVM
+ from luci.lib.ClusterConf.MySQL import MySQL
+ from luci.lib.ClusterConf.DRBD import DRBD
+-from luci.lib.ClusterConf.Vm import Vm 
++from luci.lib.ClusterConf.Vm import Vm
+ from luci.lib.ClusterConf.Named import Named
+ from luci.lib.ClusterConf.SAPDatabase import SAPDatabase
+ from luci.lib.ClusterConf.SAPInstance import SAPInstance
+ from luci.lib.ClusterConf.OracleDB import OracleDB
+ from luci.lib.ClusterConf.SybaseASE import SybaseASE
+ from luci.lib.ClusterConf.Service import Service
+-from luci.lib.ClusterConf.Vm import Vm
+ from luci.lib.ClusterConf.RefObject import RefObject
+ 
+ from xml.dom import minidom
+@@ -390,6 +389,9 @@ resource_table = {
+ 
+ def create_resource(res_type, model, **kw):
+ 	errors = list()
++	if not res_type:
++		raise Exception, _('No resource type was given')
++
+ 	if not resource_table.has_key(res_type):
+ 		raise Exception, _('Unknown resource type: "%s"') % res_type
+ 
+@@ -520,10 +522,7 @@ def validate_clusvc_form(model, **kw):
+ 				resObj = create_resource(res_type, model, **dummy_form)
+ 		except Exception, e:
+ 			resObj = None
+-			if False and type(e.args) in (list, tuple):
+-				errors.append(_('Error adding resource type %s: %s') % (res_type, ', '.join(e.args)))
+-			else:
+-				errors.append(_('Error adding resource type %s: %s') % (res_type, str(e)))
++			errors.append(_('Error adding resource type %s: %s') % (res_type, str(e)))
+ 			log.exception('Error validating %s resource' % res_type)
+ 
+ 		if not resObj:
+@@ -650,3 +649,15 @@ def validate_clusvc_form(model, **kw):
+ 		model.resourcemanager_ptr.addChild(new_service)
+ 	model.setModified(True)
+ 	return (len(errors) == 0, {'errors': errors})
++
++def validate_resource_form(model, **kw):
++	errors = []
++
++	try:
++		res_type = kw.get('type')
++		res = create_resource(res_type, model, **kw)
++		model.getResourcesPtr().addChild(res)
++	except Exception, e:
++		errors.append(_('Error adding resource type %s: %s') % (res_type, str(e)))
++		return (False, {'errors': errors})
++	return (True, {})

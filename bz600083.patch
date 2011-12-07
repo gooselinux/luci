@@ -1,0 +1,105 @@
+commit c8079c9cb20627b2b8b6e97831785ea3f347bfaa
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Thu Jul 8 13:09:27 2010 -0500
+
+    Removed ability to choose broadcast from configuration.
+
+diff --git a/luci/templates/configure.html b/luci/templates/configure.html
+index a70eaeb..d1ed4e1 100644
+--- a/luci/templates/configure.html
++++ b/luci/templates/configure.html
+@@ -104,8 +104,10 @@
+ 	      <label class=" indent">Multicast address</label>
+ 	      <input type="text" class="text" name="mcast_address" value="${cluster_data and cluster_data.getMcastAddr()}"/>
+ 	      <br />
++	      <!--
+ 	      <input name="multicast" value="broadcast" class="radio" type="radio" disabled="true"/>
+ 	      <label class="choice">Use broadcast (EXPERIMENTAL)</label>
++	      -->
+ 	    </div>    
+ 	    <div class="row"><div id="button"><button class="button small silver">Show Advanced Properties</button></div>
+ 	    </div>
+
+commit a00298b183baffe27a47e49e102f028ba39aa337
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Fri Jul 9 12:47:00 2010 -0400
+
+    Fix rhbz#600083  - Add text to broadcast mode to note that it is for demos only
+
+diff --git a/luci/lib/ClusterConf/ModelBuilder.py b/luci/lib/ClusterConf/ModelBuilder.py
+index 6ad504b..3dc447b 100644
+--- a/luci/lib/ClusterConf/ModelBuilder.py
++++ b/luci/lib/ClusterConf/ModelBuilder.py
+@@ -1060,6 +1060,25 @@ class ModelBuilder:
+           node.removeChild(node_child)
+           break
+ 
++  def set_cluster_broadcast(self):
++    if self.del_cluster_multicast() is False:
++      return False
++    broadcast = self.CMAN_ptr.addAttribute('broadcast', 'yes')
++
++  def del_cluster_broadcast(self):
++    if self.CMAN_ptr is None:
++      return False
++    self.CMAN_ptr.removeAttribute('broadcast')
++    self.isModified = True
++
++  def get_cluster_broadcast(self):
++    if self.CMAN_ptr is None:
++      return False
++    broadcast = self.CMAN_ptr.getAttribute('broadcast')
++    if broadcast and broadcast.lower() in ('1', 'true', 'yes'):
++        return True
++    return False
++
+   def del_cluster_multicast(self):
+     if self.CMAN_ptr is None:
+       return False
+diff --git a/luci/templates/configure.html b/luci/templates/configure.html
+index d1ed4e1..65c8a49 100644
+--- a/luci/templates/configure.html
++++ b/luci/templates/configure.html
+@@ -104,10 +104,9 @@
+ 	      <label class=" indent">Multicast address</label>
+ 	      <input type="text" class="text" name="mcast_address" value="${cluster_data and cluster_data.getMcastAddr()}"/>
+ 	      <br />
+-	      <!--
+-	      <input name="multicast" value="broadcast" class="radio" type="radio" disabled="true"/>
+-	      <label class="choice">Use broadcast (EXPERIMENTAL)</label>
+-	      -->
++	      <input name="multicast" value="broadcast" class="radio" type="radio"
++	        py:attrs="cluster_data and cluster_data.get_cluster_broadcast() is True and {'checked': 'checked'} or {}"/>
++	      <label class="choice">Use broadcast (demos only - no production support)</label>
+ 	    </div>    
+ 	    <div class="row"><div id="button"><button class="button small silver">Show Advanced Properties</button></div>
+ 	    </div>
+diff --git a/luci/widget_validators/validate_cluster_prop.py b/luci/widget_validators/validate_cluster_prop.py
+index dab2542..7b2e6dd 100644
+--- a/luci/widget_validators/validate_cluster_prop.py
++++ b/luci/widget_validators/validate_cluster_prop.py
+@@ -7,8 +7,6 @@
+ 
+ from pylons.i18n import ugettext as _
+ 
+-from luci.lib.form_utils import FormUtils
+-
+ from luci.lib.ClusterConf.FailoverDomain import FailoverDomain
+ from luci.lib.ClusterConf.FailoverDomainNode import FailoverDomainNode
+ from luci.lib.ClusterConf.QuorumD import QuorumD
+@@ -389,9 +387,15 @@ def validate_cluster_config_form(model, **kw):
+         mcast_addr = kw.get('mcast_address')
+ 
+         if multicast == "multicast":
++            model.del_cluster_broadcast()
+             model.del_cluster_multicast()
+         elif multicast == "multicast_manual":
++            model.del_cluster_broadcast()
+             model.set_cluster_multicast(mcast_addr, None)
++        elif multicast == "broadcast":
++            model.set_cluster_broadcast()
++        else:
++            return (False, {'errors': [ _('Invalid value for multicast configuration: %s') % multicast]})
+ 
+         totem = model.getTotemPtr()
+         if totem is None:

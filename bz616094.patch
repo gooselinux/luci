@@ -1,0 +1,18 @@
+commit b3770da5cc04607539e7282449c13fa9073ea89a
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Mon Jul 26 15:09:54 2010 -0400
+
+    Fix rhbz#616094 - Deleting a fence device which is in use, causes a traceback on Nodes page
+
+diff --git a/luci/lib/ClusterConf/ModelBuilder.py b/luci/lib/ClusterConf/ModelBuilder.py
+index eb711c5..958dc79 100644
+--- a/luci/lib/ClusterConf/ModelBuilder.py
++++ b/luci/lib/ClusterConf/ModelBuilder.py
+@@ -658,6 +658,7 @@ class ModelBuilder:
+   def deleteFenceDevice(self, device):
+     if self.fencedevices_ptr is None or device is None:
+       return False
++    self.removeFenceInstancesForFenceDevice(device.getName())
+     self.fencedevices_ptr.removeChild(device)
+     return True
+ 

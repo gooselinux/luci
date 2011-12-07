@@ -1,0 +1,19 @@
+commit ed7581f225169c7ca87d100e5a44d2b543c6e2cd
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Mon Jul 19 15:30:44 2010 -0500
+
+    Disabled fence instances when there are no configured fence devices (bz#615917)
+
+diff --git a/luci/templates/node.html b/luci/templates/node.html
+index 842433d..19834c6 100644
+--- a/luci/templates/node.html
++++ b/luci/templates/node.html
+@@ -344,7 +344,7 @@
+ 		  </py:for>
+ 		  <tr>
+ 		    <td colspan="3">
+-		      <input type="button" value="Add a Fence Instance" class="button small silver" onclick="$(create_fence_device.methodname).attr('value','${method.getName()}');$('#create_fencedev_dialog').dialog('open')"/>
++		      <input type="button" py:if="len(cluster_data.getFenceDevices()) > 0" value="Add a Fence Instance" class="button small silver" onclick="$(create_fence_device.methodname).attr('value','${method.getName()}');$('#create_fencedev_dialog').dialog('open')"/>
+ 		    </td>
+ 		  </tr>
+ 		</table>

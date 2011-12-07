@@ -1,0 +1,19 @@
+commit 4a44f5054a42479b6b8e944e0262bcd4123d9d1b
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Mon Jul 26 21:47:25 2010 -0400
+
+    Fix rhbz#615872 - unicode error deleting a cluster
+
+diff --git a/luci/controllers/cluster.py b/luci/controllers/cluster.py
+index 94445e9..0dd98ef 100644
+--- a/luci/controllers/cluster.py
++++ b/luci/controllers/cluster.py
+@@ -53,7 +53,7 @@ class ClusterController(BaseController):
+             command = kw['MultiAction']
+             for key, element in kw.items():
+                 if element == "on":
+-                     db_remove_cluster(key)
++                     db_remove_cluster(unicode(key))
+         redirect('/cluster/')
+ 
+     @expose()

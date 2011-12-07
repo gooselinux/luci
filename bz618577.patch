@@ -1,0 +1,31 @@
+commit ad558a8444b8e5e8e056de0c5e424f6582cb37f1
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Thu Jul 29 22:17:29 2010 -0400
+
+    Fix the log and status messages when adding an IP resource
+    
+    Resolves: rhbz#618577
+
+diff --git a/luci/controllers/cluster.py b/luci/controllers/cluster.py
+index 09f0c3c..5380502 100644
+--- a/luci/controllers/cluster.py
++++ b/luci/controllers/cluster.py
+@@ -365,13 +365,16 @@ class IndividualClusterController(BaseController):
+                 # For IP resources there is no name, just an IP Address
+                 # and to make IP addresses work you need to add a .html
+                 if res_name == None and kw.get('address'):
+-                    res_name = kw.get('address') + ".html"
++                    res_name = kw.get('address')
++                    redir_fmt = '%s/%s.html'
++                else:
++                    redir_fmt = '%s/%s'
+                 log.info('User "%s" %s global resource "%s" in cluster "%s"'
+                     % (self.username, cur_action, res_name, self.name))
+                 flash(_('%s global resource "%s"') % (cur_action, res_name))
+                 self.model.setModified(True)
+                 rh.update_cluster_conf(self.model)
+-                redirect('%s/%s' % (tmpl_context.cluster_url, res_name))
++                redirect(redir_fmt % (tmpl_context.cluster_url, res_name))
+             else:
+                 msgs = vret[1].get('errors')
+                 if msgs and len(msgs) > 0:

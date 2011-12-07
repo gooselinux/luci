@@ -1,0 +1,21 @@
+commit 1a995def2ec349e4932f136e281cb497aa68b631
+Author: Chris Feist <cfeist@redhat.com>
+Date:   Fri Jul 16 15:18:30 2010 -0500
+
+    Fixed issue with adding an IP resource causing an error (bz#614434)
+
+diff --git a/luci/controllers/cluster.py b/luci/controllers/cluster.py
+index 99cb11c..6fc376f 100644
+--- a/luci/controllers/cluster.py
++++ b/luci/controllers/cluster.py
+@@ -336,6 +336,10 @@ class IndividualClusterController(BaseController):
+             vret = validate_resource_form(self.model, **kw)
+             if vret[0] is True:
+                 res_name = kw.get('resourcename')
++                # For IP resources there is no name, just an IP Address
++                # and to make IP addresses work you need to add a .html
++                if res_name == None and kw.get('address'):
++                    res_name = kw.get('address') + ".html"
+                 log.info('User "%s" %s global resource "%s" in cluster "%s"'
+                     % (self.username, cur_action, res_name, self.name))
+                 flash(_('%s global resource "%s"') % (cur_action, res_name))

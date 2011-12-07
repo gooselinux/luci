@@ -1,0 +1,170 @@
+commit 5c4874ea60c9b5e76c463ac57bf0c92eb1274bfe
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Thu Jun 10 02:40:53 2010 -0400
+
+    Fix rhbz #600047: luci allows deletion of global resources that are used by services
+
+diff --git a/luci/controllers/cluster.py b/luci/controllers/cluster.py
+index 601b79f..f227600 100644
+--- a/luci/controllers/cluster.py
++++ b/luci/controllers/cluster.py
+@@ -265,14 +265,28 @@ class IndividualClusterController(BaseController):
+                 status='error')
+             redirect(tmpl_context.cluster_url)
+         if command == 'Delete':
+-            log.info('User "%s" deleted resource "%s" in cluster "%s"'
+-                % (self.username, ', '.join(cur_list), self.name))
+-            flash(_("Deleting resources %s") % ', '.join(cur_list),
+-                status='info')
++            errors = []
++            res_ptr = cmodel.getResourcesPtr()
+             for i in cur_list:
+-                cmodel.deleteResource(i)
+-            cmodel.setModified()
+-            rh.update_cluster_conf(cmodel)
++                try:
++                    cur_res = cmodel.getResourceByName(i)
++                    if cur_res.getRefcount() > 1:
++                        errors.append(_('Global resource "%s" is in use so cannot be removed') % i)
++                    else:
++                        res_ptr.removeChild(cur_res)
++                except:
++                    pass
++
++            if len(errors) != 0:
++                flash(_('%s') % ', '.join(errors), status='error')
++            else:    
++                log.info('User "%s" deleted resource "%s" in cluster "%s"'
++                    % (self.username, ', '.join(cur_list), self.name))
++                flash(_("Deleting resources %s") % ', '.join(cur_list),
++                    status='info')
++
++                cmodel.setModified()
++                rh.update_cluster_conf(cmodel)
+         elif command in ("Create", "Edit"):
+             if command == 'Create':
+                 cur_action = _('Created')
+diff --git a/luci/lib/ClusterConf/BaseResource.py b/luci/lib/ClusterConf/BaseResource.py
+index 17db412..265cd59 100644
+--- a/luci/lib/ClusterConf/BaseResource.py
++++ b/luci/lib/ClusterConf/BaseResource.py
+@@ -15,6 +15,16 @@ class BaseResource(TagObject):
+     self.TAG_NAME = TAG_NAME
+     self.resource_type = ""
+     self.deny_all_children = False
++    self.refcount = 1
++  
++  def ref(self):
++    self.refcount += 1
++  
++  def unref(self):
++    self.refcount -= 1
++
++  def getRefcount(self):
++    return self.refcount
+ 
+   def getResourceType(self):
+     return self.resource_type
+diff --git a/luci/lib/ClusterConf/RefObject.py b/luci/lib/ClusterConf/RefObject.py
+index fc0fa37..4e6e75a 100644
+--- a/luci/lib/ClusterConf/RefObject.py
++++ b/luci/lib/ClusterConf/RefObject.py
+@@ -14,11 +14,23 @@ class RefObject(TagObject):
+     TagObject.__init__(self)
+     self.obj_ptr = obj
+     self.TAG_NAME = self.obj_ptr.getTagName()
++
++    try:
++        obj.ref()
++    except:
++        pass
++
+     if self.TAG_NAME == "ip":
+       self.addAttribute("ref", self.obj_ptr.getAttribute("address"))
+     else:
+       self.addAttribute("ref", self.obj_ptr.getName())
+ 
++  def __del__(self):
++    try:
++        self.obj_ptr.unref()
++    except:
++        pass
++
+   def getObj(self):
+     return self.obj_ptr
+ 
+diff --git a/luci/templates/resource.html b/luci/templates/resource.html
+index 47e721c..585537a 100644
+--- a/luci/templates/resource.html
++++ b/luci/templates/resource.html
+@@ -36,27 +36,34 @@
+       </tr>
+     </thead>
+     <tbody>
+-      <!--! List all the resources. -->
+-      <py:if test="cluster_data">
++     <!--! List all the resources. -->
++     <py:if test="cluster_data">
+       <tr py:for="(i, resource_data) in enumerate(cluster_data.getResources())"
+-	py:with="entity_name = resource_data.getName()"
+-	py:attrs="entity_name==name and {'class': 'chosen'} or (not i%2 and {'class': 'even'} or None)">
+-	<td class="checkbox"><input type="checkbox" name="${entity_name}"/></td>
+-	<!--! Branch according to the status of the service. -->
+-	<td class="main_id">
+-	  <a href="${tg.url(base_url + '/' + entity_name + '.html')}">
+-	    <span class="entity_ok">${entity_name}</span>
+-	  </a>
+-	</td>
+-	<td class="main_id">
+-	  <a href="${tg.url(base_url + '/' + entity_name + '.html')}">
+-	    <span class="entity_ok">${resource_data.getResourceType()}</span>
+-	  </a>
+-	</td>
+-	<td>
+-	</td>
++        py:with="entity_name = resource_data.getName();
++                 refcount = resource_data.getRefcount()"
++        py:attrs="entity_name==name and {'class': 'chosen'} or (not i%2 and {'class': 'even'} or None)">
++        <td class="checkbox">
++            <input type="checkbox" name="${entity_name}"
++                py:attrs="refcount != 1 and {'disabled':'disabled'} or {}"/>
++        </td>
++        <td class="main_id">
++            <a href="${tg.url(base_url + '/' + entity_name + '.html')}"><span class="entity_ok">${entity_name}</span></a>
++        </td>
++        <td class="main_id">
++            <a href="${tg.url(base_url + '/' + entity_name + '.html')}"><span class="entity_ok">${resource_data.getResourceType()}</span></a>
++        </td>
++        <td>
++    	    <py:choose test="refcount">
++	            <py:when test="1">
++	                No
++	            </py:when>
++	            <py:otherwise>
++	                <img src="${tg.url('/images/check-11.png')}" alt="Yes" />
++	            </py:otherwise>
++	        </py:choose>
++	    </td>
+       </tr>
+-      </py:if>
++     </py:if>
+     </tbody>
+   </table>
+   </div>
+@@ -83,7 +90,7 @@
+ 
+     <!--! DETAILS - header section. -->
+     <div id="details_header">
+-      <h3 py:content="name">Service A</h3>
++      <h3 py:content="name"/>
+       <div id="details_header_buttons">
+         <a href="${tg.url(resources_cmd + '?command=Delete' + '&amp;name=' + name)}" id="dh_delete" title="delete"><span class="hide">delete</span></a>
+       </div>
+@@ -91,7 +98,6 @@
+ 
+     <!--! DETAILS - resources. -->
+     <div class="details_section">
+-      <!--a href="${tg.url(cmd_url + '/service')}" class="float_button">Create New Resource in this Service</a-->
+       <div class="details_inner">
+        <form name="add_resource_dialog" method="post" action="${tg.url(resources_cmd + '?command=Edit')}">
+         <input type="hidden" name="edit" value="1"/>

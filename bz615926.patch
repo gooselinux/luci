@@ -1,0 +1,149 @@
+commit d0fab117082f7081b5d9675fbddf0945fe0763a4
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Tue Aug 3 02:15:02 2010 -0400
+
+    Fix handling of qdisk and of cman attributes "expected_votes" and "two_node"
+
+diff --git a/luci/controllers/cluster.py b/luci/controllers/cluster.py
+index 5380502..13c8a2d 100644
+--- a/luci/controllers/cluster.py
++++ b/luci/controllers/cluster.py
+@@ -689,8 +689,14 @@ class IndividualClusterController(BaseController):
+             log.info('User "%s" updated the cluster properties for cluster "%s"'
+                     % (self.username, self.name))
+             flash("Applying Settings")
++            msgs = vret[1].get('flash')
++            if msgs and len(msgs) > 0:
++                flash(', '.join(msgs), status="info")
+             self.model.setModified(True)
+             rh.update_cluster_conf(self.model)
++            if vret[1].get('start_qdisk'):
++                log.info('Starting qdiskd for cluster "%s"' % self.name)
++                rh.cluster_node_start(self.name, [])
+         else:
+             msgs = vret[1].get('errors')
+             if msgs and len(msgs) > 0:
+diff --git a/luci/lib/ClusterConf/ModelBuilder.py b/luci/lib/ClusterConf/ModelBuilder.py
+index 958dc79..84daf20 100644
+--- a/luci/lib/ClusterConf/ModelBuilder.py
++++ b/luci/lib/ClusterConf/ModelBuilder.py
+@@ -151,7 +151,6 @@ class ModelBuilder:
+     self.fence_daemon_ptr = None
+     self.isModified = False
+     self.quorumd_ptr = None
+-    self.usesQuorumd = False
+     self.fence_xvmd_ptr = None
+     self.unusual_items = list()
+     self.isVirtualized = False
+@@ -231,7 +230,6 @@ class ModelBuilder:
+         self.fence_daemon_ptr = new_object
+       elif parent_node.nodeName == QUORUMD_PTR_STR:
+         self.quorumd_ptr = new_object
+-        self.usesQuorumd = True
+       elif parent_node.nodeName == GULM_TAG_STR:
+         self.GULM_ptr = new_object
+         self.lock_type = GULM_TYPE
+@@ -776,8 +774,19 @@ class ModelBuilder:
+   def getMcastInterface(self):
+     return self.mcast_interface
+ 
++  def setQuorumd(self, qd):
++    cp = self.getClusterPtr()
++    cp.addChild(qd)
++    self.quorumd_ptr = qd
++
++  def delQuorumd(self):
++    cp = self.getClusterPtr()
++    if self.quorumd_ptr is not None:
++        cp.removeChild(self.quorumd_ptr)
++        self.quorumd_ptr = None
++
+   def isQuorumd(self):
+-    return self.usesQuorumd
++    return self.quorumd_ptr is not None
+ 
+   def getQuorumdPtr(self):
+     return self.quorumd_ptr
+@@ -1188,7 +1197,10 @@ class ModelBuilder:
+         cur_votes = 1
+       node_votes += cur_votes
+ 
+-    return node_votes + qdisk_votes
++    if qdisk_votes != 0:
++        return node_votes + qdisk_votes
++    else:
++        return 2 * node_votes - 1
+ 
+   def updateReferences(self):
+     self.__updateReferences(self.cluster_ptr)
+@@ -1199,9 +1211,9 @@ class ModelBuilder:
+       self.__updateReferences(t)
+ 
+   def perform_final_check(self):
++    self.check_two_node()
+     if self.check_gulm_count() is False:
+       return False
+-    self.check_two_node()
+ 
+     #add more checks
+ 
+@@ -1224,16 +1236,16 @@ class ModelBuilder:
+         self.cluster_ptr.addChild(cman)
+         self.CMAN_ptr = cman
+ 
+-      if not self.isQuorumd():
++      if self.isQuorumd():
++        self.CMAN_ptr.removeAttribute('two_node')
++        self.CMAN_ptr.addAttribute('expected_votes', str(self.get_expected_votes()))
++      else:
+         if clusternodes_count == 2:
+           self.CMAN_ptr.addAttribute('two_node', '1')
+           self.CMAN_ptr.addAttribute('expected_votes', '1')
+         else:
+           self.CMAN_ptr.removeAttribute('two_node')
+           self.CMAN_ptr.removeAttribute('expected_votes')
+-      else:
+-        self.CMAN_ptr.removeAttribute('two_node')
+-        self.CMAN_ptr.addAttribute('expected_votes', str(self.get_expected_votes()))
+ 
+   def dual_power_fence_check(self):
+     # if 2 or more power controllers reside in the same fence level,
+diff --git a/luci/widget_validators/validate_cluster_prop.py b/luci/widget_validators/validate_cluster_prop.py
+index b35ccaa..eeb7de1 100644
+--- a/luci/widget_validators/validate_cluster_prop.py
++++ b/luci/widget_validators/validate_cluster_prop.py
+@@ -150,7 +150,6 @@ def validate_qdisk_prop_form(model, **kw):
+     errors = []
+     use_qdisk = None
+ 
+-    cp = model.getClusterPtr()
+     qdp = model.getQuorumdPtr()
+ 
+     quorumd = kw.get('quorumd')
+@@ -164,7 +163,7 @@ def validate_qdisk_prop_form(model, **kw):
+ 
+     if use_qdisk is False:
+         if qdp is not None:
+-            cp.removeChild(qdp)
++            model.delQuorumd()
+             return (True, {'flash': [ _('The updated quorum disk settings will not take effect until the cluster is restarted') ] })
+         # No changes
+         return (False, {'errors': [ _('No changes were made to the quorum disk settings') ] })
+@@ -270,12 +269,12 @@ def validate_qdisk_prop_form(model, **kw):
+         return (False, {'errors': errors })
+ 
+     ret = (len(errors) < 1, {'errors': errors})
+-    if qdp:
+-        cp.removeChild(qdp)
++    if qdp is not None:
++        model.delQuorumd()
+     else:
+-        ret[1]['flash'] = [ _('The updated quorum disk settings will not take effect until the cluster is restarted') ]
+-    cp.addChild(qd)
+-    return (len(errors) < 1, {'errors': errors})
++        ret[1]['start_qdisk'] = True
++    model.setQuorumd(qd)
++    return ret
+ 
+ def validate_add_existing(**kw):
+     errors = []

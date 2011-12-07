@@ -1,0 +1,127 @@
+diff -ur a/luci/templates/fence_devices.html b/luci/templates/fence_devices.html
+--- a/luci/templates/fence_devices.html	2010-07-27 22:59:10.000000000 -0400
++++ b/luci/templates/fence_devices.html	2010-07-27 18:53:55.000000000 -0400
+@@ -2230,6 +2230,10 @@
+ 	<input type="hidden" name="fence_type" value="fence_intelmodular" />
+ </div>
+ 
++<div py:def="fence_unknown(cur_fencedev, ni)" id="fence_unknown" class="fencedevform row">
++	<span class="error">Unknown fence device type</span>
++</div>
++
+ <div py:def="fence_ldom(cur_fencedev, ni)" id="fence_ldom" class="fencedevform row"
+ 	 py:attrs="cur_fencedev and {'id': 'fd_%s' % cur_fencedev.getName()}">
+ 	<table class="formtable">
+@@ -2636,6 +2640,7 @@
+ ${fence_xcat(None,0)}
+ ${fence_zvm(None,0)}
+ ${fence_ibmblade(None,0)}
++${fence_unknown(None,0)}
+ </div>
+ 
+ <script type="text/javascript">
+diff -ur a/luci/templates/fence.html b/luci/templates/fence.html
+--- a/luci/templates/fence.html	2010-07-27 22:59:10.000000000 -0400
++++ b/luci/templates/fence.html	2010-07-27 18:53:55.000000000 -0400
+@@ -108,8 +108,11 @@
+     <div class="details_section">
+         <form name="create_fence_device" method="post" action="${tg.url(fences_cmd + '?command=Update')}">
+         <?python
+-            agent_type = details.getAgentType()
+-            agent_fn = eval(agent_type)
++            try:
++                agent_type = details.getAgentType()
++                agent_fn = eval(agent_type)
++            except:
++                agent_fn = eval('fence_unknown')
+         ?>
+         ${agent_fn(details, 0)}
+         <input type="submit" class="button formsubmit blue" value="Apply"/>
+@@ -135,7 +138,7 @@
+             <!--! List all the nodes connected with the current (shared) fence. -->
+             <tr py:for="node in cluster_data.getNodesUsingFence(details.getName())" class="grid_row">
+               <!--! Branch according to the status of the node. -->
+-              <py:choose test="cluster_status.nodes.get(node.getName()).clustered">
++              <py:choose test="cluster_status and cluster_status.nodes and cluster_status.nodes.get(node.getName()).clustered">
+               <!--! 1) Node is active. -->
+               <py:when test="'true'">
+               <td class="icon"></td>
+diff -ur a/luci/templates/fence_instances.html b/luci/templates/fence_instances.html
+--- a/luci/templates/fence_instances.html	2010-07-27 22:59:10.000000000 -0400
++++ b/luci/templates/fence_instances.html	2010-07-28 00:15:06.000000000 -0400
+@@ -798,6 +798,15 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
++<div py:def="fence_unknown_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_unknown_instance"
++	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
++
++	<input type="hidden" name="fence_type" value="fence_unknown" />
++	<input type="hidden" name="fence_instance" value="1" />
++	<input type="hidden" name="parent_fencedev"
++		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
++</div>
++
+ <div py:def="fence_instance_container"
+ 	id="fence_instance_container" class="hidden">
+ ${fence_apc_instance(None, None, None)}
+@@ -835,5 +844,6 @@
+ ${fence_xcat_instance(None, None, None)}
+ ${fence_zvm_instance(None, None, None)}
+ ${fence_scsi_instance(None, None, None)}
++${fence_unknown_instance(None, None, None)}
+ </div>
+ </html>
+diff -ur a/luci/templates/node.html b/luci/templates/node.html
+--- a/luci/templates/node.html	2010-07-27 22:59:10.000000000 -0400
++++ b/luci/templates/node.html	2010-07-28 00:15:06.000000000 -0400
+@@ -297,16 +297,19 @@
+ 		    <th></th>
+ 		  </tr>
+ 		  <py:for each="instancenum,(fin,fd) in enumerate(instances)">
+-		  <?python
+-		    agent_type = fd.getAgentType()
+-		    agent_name = fd.getPrettyName()
+-		    agent_alias = fd.getName()
+-		    fenceinst_num += 1
+-		  ?>
+-		  <?python
+-		    inst_fn = eval(agent_type + '_instance')
+-		    instance_id = "%s-%s" % (order, instancenum)
+-		  ?>
++			<?python
++				agent_type = fd.getAgentType()
++				agent_name = fd.getPrettyName()
++				agent_alias = fd.getName()
++				fenceinst_num += 1
++			?>
++			<?python
++				try:
++					inst_fn = eval(agent_type + '_instance')
++				except:
++					inst_fn = eval('fence_unknown_instance')
++				instance_id = "%s-%s" % (order, instancenum)
++			?>
+ 		  <tr><td>
+ 		      <div class="hidden">
+ 			<div id="edit_fencedev_dialog_${instance_id}">
+@@ -317,11 +320,14 @@
+ 			    <input type="hidden" name="fencedev" value="${agent_alias}"/>
+ 
+ 			    <div id="fence_instance_area">
+-			      <?python
+-			      inst_fn = eval(agent_type + '_instance')
+-			      inst_fn(fin, instance_id, None)
+-			      ?>
+-			      ${inst_fn(fin, cur_dev_id, '%s_%s' % (cur_dev_id, cur_dev_id))}
++					<?python
++						try:
++							inst_fn = eval(agent_type + '_instance')
++						except:
++							inst_fn = eval('fence_unknown_instance')
++						inst_fn(fin, instance_id, None)
++					?>
++					${inst_fn(fin, cur_dev_id, '%s_%s' % (cur_dev_id, cur_dev_id))}
+ 			    </div>
+ 			    <div class="row">
+ 			      <input type="Submit" value="Submit" class="button formsubmit blue" />

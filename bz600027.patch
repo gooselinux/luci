@@ -1,0 +1,390 @@
+commit 13c81f9fb511d0e398f60a610d1f6df403276a6b
+Author: Ryan McCabe <rmccabe@redhat.com>
+Date:   Fri Jul 23 18:38:36 2010 -0400
+
+    cluster service UX enhancements
+
+diff --git a/luci/public/css/shared.css b/luci/public/css/shared.css
+index fd4efc0..88d82f4 100644
+--- a/luci/public/css/shared.css
++++ b/luci/public/css/shared.css
+@@ -501,8 +501,32 @@ td.icon, th.icon {
+   background-image: url('../images/stop-blue.png');
+ }
+ 
+-div.reslevel {
+-    border-left: thin solid gray;
+-    border-bottom: thin solid gray;
+-    margin-left: +8px;
++.svc_res_table {
++    background-color: #f4f4f4;
++}
++
++.svc_padding {
++    background-color: #f4f4f4;
++}
++
++td.svc_content {
++    padding-left: 0;
++    padding-bottom:0;
++}
++
++.rescntrl {
++    padding-left: 1em;
++    padding-bottom: 1em;
++    border-bottom-style:solid;
++    border-bottom-width:1em;
++    border-bottom-color: #f4f4f4;
++}
++
++.reschild {
++    padding-left: 0;
++/*
++    border-left-style: ridge;
++    border-left-width: 1px;
++    border-left-color: gray;
++*/
+ }
+diff --git a/luci/public/js/service.js b/luci/public/js/service.js
+index 98ca41b..39aceac 100644
+--- a/luci/public/js/service.js
++++ b/luci/public/js/service.js
+@@ -9,6 +9,27 @@ $(function() {
+     });
+ })
+ 
++$(function() {
++    $('#insert_resource_dialog').dialog({
++        modal: true,
++        title: 'Add a resource to this service',
++        width: '520px',
++        autoOpen: false,
++        draggable: false,
++        resizable: false,
++    });
++})
++
++function insert_resource_dialog(form, dest_id, parent_id) {
++    var res_selector = document.getElementById('resource_selector');
++    res_selector.onchange = function() {
++        insert_resource(this.options[this.selectedIndex].value, dest_id, form, parent_id);
++        this.selectedIndex = 0;
++        $('#insert_resource_dialog').dialog('close');
++    };
++    $('#insert_resource_dialog').dialog('open');
++}
++
+ function insert_resource(res_id, container_id, form, parent_id) {
+     var num_res = Number(form.res_count.value);
+     var is_vm = false;
+@@ -26,34 +47,24 @@ function insert_resource(res_id, container_id, form, parent_id) {
+ 
+     form.res_count.value = num_res + 1;
+ 
+-    var containing_div = $('<div class="reslevel"></div>');
+     var cur_id_str = 'res_' + num_res;
++    var td_id_str = 'td_' + cur_id_str;
++    var table_id_str = 'table_' + cur_id_str;
++
++    var svc_tables = $('<table class="detailstable" id="' + table_id_str + '"><thead class="svc_padding"><tr class="svc_padding"><th class="svc_padding" width="5"/><th class="svc_padding" width="98%"/><th class="svc_padding" colspan="3"/></tr></thead><tbody><tr class="svc_res_table"><td></td><td align="right" class="svc_padding" colspan="4"><a href="#" onclick="$(\'#' + table_id_str + '\').remove();return false;">Remove</a></td></tr><tr><td class="svc_padding"></td><td colspan="4" class="svc_content" id="' + td_id_str + '"></td></tr></tbody></table>');
++    var containing_div = $('<div class="reslevel"></div>');
+     $(containing_div).attr('id', cur_id_str);
+ 
+     var child_div = $('<div class="reschild"></div>');
+     $(child_div).attr('id', 'children_res_' + num_res);
+ 
+-    var cntrl_div;
++    var cntrl_div = $('<div class="row rescntrl"></div>');
+     if (!is_vm) {
+-        cntrl_div = $('<div class="row rescntrl">Add a child</div>');
+-        var res_selector = $(document.getElementById('resource_selector')).clone();
+-        if (!res_selector) {
+-            return (-1);
+-        }
+-        $(res_selector).removeAttr('id');
+-        $(res_selector).removeAttr('onchange');
+-        $(res_selector).change(function(){
+-            insert_resource(this.options[this.selectedIndex].value, 'children_res_' + num_res, form, cur_id_str);
+-            this.selectedIndex = 0;
+-        });
+-        $(res_selector).appendTo($(cntrl_div));
+-        var remove_button = $('<input type="button" value="Remove this resource" onclick="$(\'#' + cur_id_str + '\').remove()"/>');
+-        $(remove_button).appendTo($(cntrl_div));
+-    } else {
+-        cntrl_div = $('<div class="row rescntrl"></div>');
++        var cntrl_button = $('<input type="button" class="button small silver" value="Add a child resource" onclick="insert_resource_dialog(form, \'children_res_' + num_res + '\', \'' + cur_id_str + '\');"></input>');
++        $(cntrl_button).appendTo($(cntrl_div));
+     }
+ 
+-    var dest_jelem = $(document.getElementById(container_id));
++    var dest_jelem = $('\'#' + container_id + '\'', form);
+     if (!dest_jelem) {
+         return;
+     }
+@@ -80,7 +91,8 @@ function insert_resource(res_id, container_id, form, parent_id) {
+     $(form_jelem).appendTo($(containing_div));
+     $(child_div).appendTo($(containing_div));
+     $(cntrl_div).appendTo($(containing_div));
+-    $(containing_div).appendTo($(dest_jelem));
++    $(svc_tables).appendTo($(dest_jelem));
++    $(containing_div).appendTo($(document.getElementById(td_id_str)));
+ }
+ 
+ function submit_svc_form(form) {
+@@ -99,6 +111,15 @@ function submit_svc_form(form) {
+         cur_xml += '</form>';
+         xml_str += cur_xml;
+     }
+-    form.form_xml.value =  xml_str + '</formlist>';
++    form.form_xml.value = xml_str + '</formlist>';
+     form.submit();
+ }
++
++function update_restart_opts(recovery_policy) {
++    opt_elems = $('.restart_opt')
++    if (recovery_policy != 'restart') {
++        $(opt_elems).attr('disabled', 'disabled');
++    } else {
++        $(opt_elems).removeAttr('disabled', 'disabled');
++    }
++}
+diff --git a/luci/templates/resource_list.html b/luci/templates/resource_list.html
+index ff92662..610849b 100644
+--- a/luci/templates/resource_list.html
++++ b/luci/templates/resource_list.html
+@@ -1334,11 +1334,11 @@ ${vm_resource(None,None,None,0)}
+ </div>
+ 
+ <div py:def="resource_selector(model, dest, parentid)" id="resource_select_area">
+-	<select name="res_select" id="resource_selector" class="resource_selector"
++	<select name="res_select" class="resource_selector"
+ 		py:with="
+ 			svc_onchange_fn = 'insert_resource(this.options[this.selectedIndex].value, \'%s\', this.form, \'%s\');this.selectedIndex=0' % (dest, parentid);
+ 			res_onchange_fn = 'swap_resource_form(this.options[this.selectedIndex].value);this.selectedIndex=0'"
+-		py:attrs="{'onchange': model and svc_onchange_fn or res_onchange_fn}">
++		py:attrs="{'onchange': model and svc_onchange_fn or res_onchange_fn, 'id': parentid and '%s_resource_selector' % parentid or 'resource_selector'}">
+ 		<py:if test="model" py:with="global_res = model.getResources()">
+ 			<py:if test="len(global_res) != 0">
+ 				<option>-- Global resources --</option>
+@@ -1382,18 +1382,27 @@ ${vm_resource(None,None,None,0)}
+ </div>
+ 
+ <div py:def="service_properties_dialog(svc, model)">
+-	<table>
++	<table class="detailstable"
++		py:with="recovery_policy = svc and svc.getAttribute('recovery') or ''">
++		<tbody>
++		<tr>
++			<td>Service name</td>
++			<td>
++				<input name="svc_name" type="text" class="text"
++					py:attrs="svc and {'value': svc.getName()}" />
++			</td>
++		</tr>
+ 		<tr>
+ 			<td>Automatically start this service</td>
+ 			<td>
+-				<input type="checkbox" name="autostart"
++				<input type="checkbox" class="checkbox" name="autostart"
+ 					py:attrs="(svc and svc.autostart()) and {'checked': 'checked'} or {}"/>
+ 			</td>
+ 		</tr>
+ 		<tr>
+ 			<td>Run exclusive</td>
+ 			<td>
+-				<input type="checkbox" name="exclusive"
++				<input type="checkbox" class="checkbox" name="exclusive"
+ 					py:attrs="(svc and svc.exclusive()) and {'checked': 'checked'} or {}"/>
+ 			</td>
+ 		</tr>
+@@ -1418,7 +1427,7 @@ ${vm_resource(None,None,None,0)}
+ 			<td>Recovery policy</td>
+ 			<td>
+ 				<select name="recovery"
+-					py:with="recovery_policy = svc and svc.getAttribute('recovery') or ''">
++					onchange="update_restart_opts(this.options[this.selectedIndex].value)">
+ 					<option value="relocate"
+ 						py:attrs="recovery_policy == 'relocate' and {'selected':'selected'} or {}">Relocate</option>
+ 					<option value="restart"
+@@ -1428,26 +1437,57 @@ ${vm_resource(None,None,None,0)}
+ 				</select>
+ 			</td>
+ 		</tr>
+-		<tr>
+-			<td>Maximum number of restart failures before relocating</td>
+-			<td>
+-				<input type="text" maxlength="3" name="max_restarts"
+-					py:attrs="svc and {'value': svc.getAttribute('max_restarts')} or {}"/>
+-			</td>
+-		</tr>
+-		<tr>
+-			<td>Length of time in seconds after which to forget a restart</td>
+-			<td>
+-				<input type="text" name="restart_expire_time"
+-					py:attrs="svc and {'value': svc.getAttribute('restart_expire_time')} or {}"/>
+-			</td>
+-		</tr>
+-	 </table>
++		<tr><td>
++			<fieldset>
++			<legend>Restart options</legend>
++			<table>
++				<tr>
++					<td>Maximum number of restart failures before relocating</td>
++					<td>
++						<input type="text" class="text restart_opt" size="3"
++							name="max_restarts"
++							value="${svc and svc.getAttribute('max_restarts') or ''}"
++							py:attrs="recovery_policy != 'restart' and {'disabled':'disabled'} or {}"/>
++					</td>
++				</tr>
++				<tr>
++					<td>Length of time in seconds after which to forget a restart</td>
++					<td>
++						<input type="text" class="text restart_opt" size="3"
++							name="restart_expire_time" id="restart_expire_time"
++							value="${svc and svc.getAttribute('restart_expire_time') or ''}"
++							py:attrs="recovery_policy != 'restart' and {'disabled':'disabled'} or {}"/>
++					</td>
++				</tr>
++			</table>
++			</fieldset>
++		</td></tr>
++		</tbody>
++	</table>
+ </div>
+ 
+ <div py:def="print_svc_children(model, res_list, parentid)">
+ 	<py:for each="cur_res in res_list"
+ 		py:with="cur_id_str = 'res_%d' % last_formid.next()">
++	<table class="detailstable" id="${'table_%s' % cur_id_str}">
++		<thead class="svc_padding">
++			<tr>
++				<th width="5"/>
++				<th width="98%"/>
++				<th colspan="3"/>
++			</tr>
++		</thead>
++		<tbody>
++		<tr class="svc_res_table">
++			<td></td>
++			<td align="right" colspan="4">
++				<a href="#"
++					py:attrs="{'onclick': '$(\'#table_%s\').remove();return false;' % cur_id_str}">Remove</a>
++			</td>
++		</tr>
++		<tr>
++		<td class="svc_padding"></td>
++		<td class="svc_content" colspan="4">
+ 		<div id="${cur_id_str}" class="reslevel">
+ 			<?python
+ 				cur_res_type = cur_res.getTagName()
+@@ -1467,12 +1507,15 @@ ${vm_resource(None,None,None,0)}
+ 				</py:if>
+ 			</div>
+ 			<div class="row rescntrl" py:if="cur_res_type != 'vm'">
+-				Add a child
+-				${resource_selector(model, 'children_%s' % cur_id_str, cur_id_str)}
+-				<input type="button" value="Remove this resource"
+-					py:attrs="{'onclick': '$(\'#%s\').remove()' % cur_id_str}" />
++				<input type="button" class="button small silver"
++					value="Add a child resource"
++					onclick="${'insert_resource_dialog(this.form, \'children_%s\', \'%s\')' % (cur_id_str, cur_id_str)}"/>
+ 			</div>
+ 		</div> 
++	</td>
++	</tr>
++	</tbody>
++	</table>
+ 	</py:for>
+ </div>
+ </html>
+diff --git a/luci/templates/service.html b/luci/templates/service.html
+index be65ad1..6970baf 100644
+--- a/luci/templates/service.html
++++ b/luci/templates/service.html
+@@ -23,7 +23,7 @@
+   <div class="sectionblock">
+   <xi:include href="submenu.html"/>
+   <div id="toolbar">
+-    <a href="#" class="toolbar_button" id="tb_add" onclick="$('#add_service_dialog').dialog('open')">Add</a>
++    <a href="#" class="toolbar_button" id="tb_add" onclick="$('#add_service_dialog').dialog('open');return false;">Add</a>
+     <input type="submit" name="MultiAction" value="${_('Start')}" class="toolbar_button" id="tb_start" />
+     <input type="submit" name="MultiAction" value="${_('Restart')}" class="toolbar_button" id="tb_reboot" />
+     <input type="submit" name="MultiAction" value="${_('Disable')}" class="toolbar_button" id="tb_disable" />
+@@ -159,8 +159,12 @@
+         style="padding-left: 24px; "
+         name="edit_service_dialog" method="post" action="${tg.url(services_cmd + '?command=Edit')}">
+         <h4>Edit service</h4>
+-        Name <input name="svc_name" value="${svc.getName()}" type="text" class="text"/>
+         <input type="hidden" name="old_name" value="${svc.getName()}"/>
++
++	    <div class="resprop">
++	      ${service_properties_dialog(svc, cluster_data)}
++	    </div>
++
+ 	    <div id="esvc_root">
+ 	        <?python
+                 def gen_seq():
+@@ -181,20 +185,15 @@
+ 	    </div>
+ 
+         <div class="row resource_selector" py:if="svc.getTagName() != 'vm'">
+-            Add a resource to this service
+-            ${resource_selector(cluster_data, 'esvc_root', 'esvc_root')}
++            <input type="button" class="button small silver" value="Add a resource"
++                onclick="${'insert_resource_dialog(this.form, \'esvc_root\', \'esvc_root\')'}"/>
+         </div>
+ 
+-	    <div class="resprop">
+-	      ${service_properties_dialog(svc, cluster_data)}
+-	    </div>
+-
+         <div class="row">
+             <input type="button" class="formsubmit button blue" value="Submit"
+                 onclick="submit_svc_form(this.form)"/>
+-            <input type="button" class="formsubmit button silver" value="Cancel"
+-                onclick="$('#add_service_dialog').dialog('close')" />
+         </div>
++
+         <input type="hidden" name="root_elem" value="esvc_root" />
+         <input type="hidden" name="action" value="edit"/>
+         <input type="hidden" name="res_count" value="${last_formid.next()}"/>
+@@ -224,26 +223,29 @@
+       </div>
+     </div>
+     </py:otherwise>
+-
+   </div>
+   </div>
+ 
+   <div class="hidden">
++    <div id="insert_resource_dialog">
++        <div class="row resource_selector">
++            ${resource_selector(cluster_data, '', '')}
++        </div>
++    </div>
+     <div id="add_service_dialog">
+       <form name="add_service_dialog" method="post" action="${tg.url(services_cmd + '?command=Create')}">
+-        Name <input name="svc_name" value="" type="text" class="text"/>
++	    <div class="resprop">
++	      ${service_properties_dialog(None, cluster_data)}
++	    </div>
++
+ 	    <div id="svc_root">
+ 	    </div>
+ 
+         <div class="row resource_selector">
+-            Add a resource to this service
+-            ${resource_selector(cluster_data, 'svc_root', 'svc_root')}
++            <input type="button" class="button small silver" value="Add a resource"
++                onclick="${'insert_resource_dialog(this.form, \'svc_root\', \'svc_root\')'}"/>
+         </div>
+ 
+-	    <div class="resprop">
+-	      ${service_properties_dialog(None, cluster_data)}
+-	    </div>
+-
+         <div class="row">
+             <input type="button" class="formsubmit button blue" value="Submit"
+                 onclick="submit_svc_form(this.form)"/>
