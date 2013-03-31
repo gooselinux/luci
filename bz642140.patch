@@ -1,0 +1,758 @@
+diff -urN a/luci/controllers/cluster.py b/luci/controllers/cluster.py
+--- a/luci/controllers/cluster.py	2010-10-11 12:05:48.000000000 -0400
++++ b/luci/controllers/cluster.py	2010-10-11 12:05:26.000000000 -0400
+@@ -24,6 +24,7 @@
+ from luci.widget_validators.validate_fence import validateNewFenceDevice, validateFenceDevice
+ from luci.widget_validators.validate_resource import validate_clusvc_form, validate_resource_form
+ from luci.lib.ClusterConf.Method import Method
++from luci.lib.ClusterConf.Unfence import Unfence
+ from luci.widget_validators.validate_fence import validate_fenceinstance
+ 
+ import logging
+@@ -121,6 +122,7 @@
+ 
+         return self.version
+ 
++
+     @expose("luci.templates.node")
+     def nodes(self):
+         db = get_cluster_db_obj(self.name)
+@@ -146,6 +148,8 @@
+             methodname = kw.get("method_to_remove")
+             for child in node.getFenceNode().getChildren():
+                 if child.getName() == methodname:
++                    for child_device in child.getChildren():
++                        node.removeFenceInstance(child, child_device)
+                     node.getFenceNode().removeChild(child)
+                     break
+             self.model.setModified(True)
+@@ -157,7 +161,7 @@
+             methodname = kw.get("fenceinst_to_remove_method")
+             for child in node.getFenceNode().getChildren():
+                 if child.getName() == methodname:
+-                    child.removeChild(child.children[int(fenceinst)-1])
++                    node.removeFenceInstance(child, child.children[int(fenceinst)-1])
+             self.model.setModified(True)
+             rh.update_cluster_conf(self.model)
+ 
+@@ -204,8 +208,20 @@
+ 
+             parent_fencedev = kw['parent_fencedev'].replace('fd_', '', 1)
+ 
+-            retcode, retobj = validate_fenceinstance(parent_fencedev, kw['fence_type'], **kw)
++            retcode, retobj, retunfence = validate_fenceinstance(parent_fencedev, kw['fence_type'], **kw)
+             if retcode is True:
++                # Add unfence section if requested.
++                if retunfence is not None:
++                    unfence = None
++                    for child in node.getChildren():
++                        if child.getTagName() == 'unfence':
++                            unfence = child
++                            break
++                    if unfence is None:
++                        unfence = Unfence()
++                        node.addChild(unfence)
++                    unfence.addChild(retunfence)
++                # ---
+                 fence_method.addChild(retobj)
+                 if len(levels) == 0:
+                     fence_node = node.getFenceNode()
+@@ -224,8 +240,37 @@
+             (method_num,sep,fence_instance_id) = instance_id.partition('-')
+ 
+             # Create the fence device, and if it succeeds replace the old one with the new one
+-            retcode, retobj = validate_fenceinstance(kw["fencedev"], kw['fence_type'], **kw)
++            retcode, retobj, retunfence = validate_fenceinstance(kw["fencedev"], kw['fence_type'], **kw)
+             if retcode is True:
++                # Add 'unfence' section if requested, remove it otherwise.
++                old_device = node.getFenceNode().children[int(method_num)].children[int(fence_instance_id)]
++                unfence = None
++                unfence_handled = False
++                for child in node.getChildren():
++                    if child.getTagName() == 'unfence':
++                        unfence = child
++                        for child_device in unfence.getChildren():
++                            # Try to find existing unfence device that mirrored old fence device instance
++                            # (i.e. before the change, with original values of attributes) and remove it
++                            # or replace it with current attributes (i.e. after the change).
++                            if len(set(old_device.getAttributes().items()).difference(child_device.getAttributes().items())) == 0:
++                                if (retunfence is None):
++                                    unfence.removeChild(child_device)
++                                    if len(unfence.getChildren()) == 0:
++                                        # Remove the whole 'unfence' section from within 'node' section
++                                        # it is empty.
++                                        node.removeChild(unfence)
++                                else:
++                                    unfence.replaceChild(child_device, retunfence)
++                                unfence_handled = True
++                                break
++                        break
++                if not unfence_handled and retunfence is not None:
++                    if unfence is None:
++                        unfence = Unfence()
++                        node.addChild(unfence)
++                    unfence.addChild(retunfence)
++                # ---
+                 node.getFenceNode().children[int(method_num)].children[int(fence_instance_id)] = retobj
+                 self.model.setModified(True)
+                 rh.update_cluster_conf(self.model)
+diff -urN a/luci/lib/ClusterConf/ClusterNode.py b/luci/lib/ClusterConf/ClusterNode.py
+--- a/luci/lib/ClusterConf/ClusterNode.py	2010-05-28 16:29:25.000000000 -0400
++++ b/luci/lib/ClusterConf/ClusterNode.py	2010-10-11 12:05:26.000000000 -0400
+@@ -81,3 +81,21 @@
+     except Exception, e:
+         pass
+     return "UNKNOWN"
++
++  def removeFenceInstance(self, method, instance):
++    """Remove fence instance from this node and given fence method."""
++    for child in self.getChildren():
++      if child.getTagName() == 'unfence':
++        unfence = child
++        for child_device in unfence.getChildren():
++          # Try to find existing unfence device that mirrored fence device instance
++          # to be removed and remove it, too.
++          if len(set(instance.getAttributes().items()).difference(child_device.getAttributes().items())) == 0:
++            unfence.removeChild(child_device)
++            if len(unfence.getChildren()) == 0:
++              # Remove the whole 'unfence' section from within 'node' section
++              # if it is empty.
++              self.removeChild(unfence)
++            break
++        break
++    method.removeChild(instance)
+diff -urN a/luci/lib/ClusterConf/Device.py b/luci/lib/ClusterConf/Device.py
+--- a/luci/lib/ClusterConf/Device.py	2010-05-28 16:29:25.000000000 -0400
++++ b/luci/lib/ClusterConf/Device.py	2010-10-11 12:05:22.000000000 -0400
+@@ -35,3 +35,11 @@
+     if name == OPTION:
+       self.has_native_option_set = True
+     self.attr_hash[name] = value
++
++  def clone(self):
++    """Creates a shallow copy of itself."""
++    ret = TagObject.clone(self)
++    ret.agent_type = self.agent_type
++    ret.has_native_option_set = self.has_native_option_set
++    ret.pretty_fence_names = self.pretty_fence_names
++    return ret
+diff -urN a/luci/lib/ClusterConf/ModelBuilder.py b/luci/lib/ClusterConf/ModelBuilder.py
+--- a/luci/lib/ClusterConf/ModelBuilder.py	2010-10-11 12:05:48.000000000 -0400
++++ b/luci/lib/ClusterConf/ModelBuilder.py	2010-10-11 12:05:26.000000000 -0400
+@@ -11,6 +11,7 @@
+ from ClusterNode import ClusterNode
+ from ClusterNodes import ClusterNodes
+ from Fence import Fence
++from Unfence import Unfence
+ from FenceDevice import FenceDevice
+ from FenceDevices import FenceDevices
+ from Method import Method
+@@ -64,6 +65,7 @@
+              'clusternode': ClusterNode,
+              'altname': Altname,
+              'fence': Fence,
++             'unfence': Unfence,
+              'fencedevice': FenceDevice,
+              'fencedevices': FenceDevices,
+              'method': Method,
+@@ -343,7 +345,7 @@
+     if num_fdevs < 1:
+       return None
+     return device[0]
+-      
++
+   ##Because fence devices are declared in a separate XML section
+   ##in conf file, agent types for fence instances must be done in
+   ##a separate pass, after the DOM is completely built. This method
+@@ -371,7 +373,7 @@
+             self.errmsg = 'Unknown fence device: %s' % child.getName()
+           except Exception, e1:
+             self.errors = True
+-    
++
+   ##This method builds RefObject containers for appropriate
+   ##entities after the object tree is built.
+   def resolve_references(self):
+@@ -575,7 +577,7 @@
+             fdev = self.getFenceDeviceByName(fence.getName())
+             if fdev and not fdev.isShared():
+                 self.deleteFenceDevice(fdev)
+-                
++
+     self.clusternodes_ptr.removeChild(clusternode)
+ 
+     found_one = True
+@@ -617,7 +619,7 @@
+   def getServicesForFdom(self, name):
+     svc_list = filter(lambda x: x.getAttribute('domain') == name, self.getServices())
+     return svc_list
+-    
++
+   def retrieveVMsByName(self, name):
+     vms = self.getVMs()
+     for v in vms:
+@@ -1170,7 +1172,7 @@
+           if fence.getName() == name:
+             kill_list.append(fence)
+         for victim in kill_list:
+-          level.removeChild(victim)
++          node.removeFenceInstance(level, victim)
+ 
+   def removeReferences(self, tagobj):
+     self.__removeReferences(tagobj, self.cluster_ptr)
+@@ -1279,7 +1281,7 @@
+               d.addAttribute(k, v)
+             d.addAttribute("option", "on")
+             level.addChild(d)
+-        
++
+   def purgePCDuplicates(self):
+     found_one = True
+     while found_one is True:
+diff -urN a/luci/lib/ClusterConf/TagObject.py b/luci/lib/ClusterConf/TagObject.py
+--- a/luci/lib/ClusterConf/TagObject.py	2010-05-28 16:29:25.000000000 -0400
++++ b/luci/lib/ClusterConf/TagObject.py	2010-10-11 12:05:22.000000000 -0400
+@@ -56,7 +56,8 @@
+     return self.attr_hash.get(kee)
+ 
+   def getChildren(self):
+-    return self.children
++    """Returns copy of children's list."""
++    return self.children[:]
+ 
+   def getName(self):
+     try:
+@@ -78,3 +79,17 @@
+         if child is None:
+           continue
+         child.searchTree(objlist, tagtype)
++
++  def replaceChild(self, oldchild, newchild):
++    """Looks up oldchild and replace it with newchild."""
++    idx = self.children.index(oldchild)
++    self.children[idx] = newchild
++
++
++  def clone(self):
++    """Creates a shallow copy of itself."""
++    ret = self.__class__ ()
++    ret.TAG_NAME = self.TAG_NAME
++    ret.attr_hash = self.attr_hash.copy()
++    ret.children = self.children
++    return ret
+diff -urN a/luci/lib/ClusterConf/Unfence.py b/luci/lib/ClusterConf/Unfence.py
+--- a/luci/lib/ClusterConf/Unfence.py	1969-12-31 19:00:00.000000000 -0500
++++ b/luci/lib/ClusterConf/Unfence.py	2010-10-11 12:05:19.000000000 -0400
+@@ -0,0 +1,15 @@
++# Copyright (C) 2006-2009 Red Hat, Inc.
++#
++# This program is free software; you can redistribute
++# it and/or modify it under the terms of version 2 of the
++# GNU General Public License as published by the
++# Free Software Foundation.
++
++from TagObject import TagObject
++
++TAG_NAME = "unfence"
++
++class Unfence(TagObject):
++  def __init__(self):
++    TagObject.__init__(self)
++    self.TAG_NAME = TAG_NAME
+diff -urN a/luci/templates/fence_instances.html b/luci/templates/fence_instances.html
+--- a/luci/templates/fence_instances.html	2010-10-11 12:05:47.000000000 -0400
++++ b/luci/templates/fence_instances.html	2010-10-11 12:05:22.000000000 -0400
+@@ -2,7 +2,7 @@
+       xmlns:xi="http://www.w3.org/2001/XInclude"
+       py:strip="">
+ 
+-<div py:def="fence_apc_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_apc_instance"
++<div py:def="fence_apc_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_apc_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -56,7 +56,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_egenera_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_egenera_instance"
++<div py:def="fence_egenera_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_egenera_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -94,7 +94,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_lpar_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_lpar_instance"
++<div py:def="fence_lpar_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_lpar_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -133,7 +133,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_vmware_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_vmware_instance"
++<div py:def="fence_vmware_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_vmware_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -180,7 +180,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_wti_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_wti_instance"
++<div py:def="fence_wti_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_wti_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -227,7 +227,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_brocade_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_brocade_instance"
++<div py:def="fence_brocade_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_brocade_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -237,6 +237,15 @@
+ 					py:attrs="cur_fence_inst and {'value': cur_fence_inst.getAttribute('port')}"/>
+ 			</td>
+ 		</tr>
++		<tr>
++			<td>Unfencing</td>
++			<td>
++				<input type="checkbox" class="checkbox" name="unfencing"
++					py:attrs="(not cur_fence_inst or kw.get('unfencing', True)) and {'checked': 'checked'}"/>
++				<label class="choice">Enable</label>
++				<input type="hidden" name="unfence_action" value="enable" />
++			</td>
++		</tr>
+ 		<tr><td colspan="2">
+ 			<div>
+ 				<input type="button" name="remove_fence" value="Remove this instance"
+@@ -251,7 +260,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_vixel_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_vixel_instance"
++<div py:def="fence_vixel_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_vixel_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -275,7 +284,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_sanbox2_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_sanbox2_instance"
++<div py:def="fence_sanbox2_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_sanbox2_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -285,6 +294,15 @@
+ 					py:attrs="cur_fence_inst and {'value': cur_fence_inst.getAttribute('port')}"/>
+ 			</td>
+ 		</tr>
++		<tr>
++			<td>Unfencing</td>
++			<td>
++				<input type="checkbox" class="checkbox" name="unfencing"
++					py:attrs="(not cur_fence_inst or kw.get('unfencing', True)) and {'checked': 'checked'}"/>
++				<label class="choice">Enable</label>
++				<input type="hidden" name="unfence_action" value="enable" />
++			</td>
++		</tr>
+ 		<tr><td colspan="2">
+ 			<div>
+ 				<input type="button" name="remove_fence" value="Remove this instance"
+@@ -299,7 +317,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_mcdata_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_mcdata_instance"
++<div py:def="fence_mcdata_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_mcdata_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -309,6 +327,15 @@
+ 					py:attrs="cur_fence_inst and {'value': cur_fence_inst.getAttribute('port')}"/>
+ 			</td>
+ 		</tr>
++		<tr>
++			<td>Unfencing</td>
++			<td>
++				<input type="checkbox" class="checkbox" name="unfencing"
++					py:attrs="(not cur_fence_inst or kw.get('unfencing', True)) and {'checked': 'checked'}"/>
++				<label class="choice">Enable</label>
++				<input type="hidden" name="unfence_action" value="enable" />
++			</td>
++		</tr>
+ 		<tr><td colspan="2">
+ 			<div>
+ 				<input type="button" name="remove_fence" value="Remove this instance"
+@@ -323,7 +350,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_gnbd_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_gnbd_instance"
++<div py:def="fence_gnbd_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_gnbd_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -347,7 +374,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_bullpap_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_bullpap_instance"
++<div py:def="fence_bullpap_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_bullpap_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -371,7 +398,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_virt_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_virt_instance"
++<div py:def="fence_virt_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_virt_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -395,7 +422,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_xvm_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_xvm_instance"
++<div py:def="fence_xvm_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_xvm_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -419,7 +446,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_bladecenter_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_bladecenter_instance"
++<div py:def="fence_bladecenter_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_bladecenter_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -466,7 +493,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_rackswitch_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_rackswitch_instance"
++<div py:def="fence_rackswitch_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_rackswitch_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -490,7 +517,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_ldom_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_ldom_instance"
++<div py:def="fence_ldom_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_ldom_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -537,7 +564,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_cisco_mds_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_cisco_mds_instance"
++<div py:def="fence_cisco_mds_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_cisco_mds_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -561,7 +588,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_eps_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_eps_instance"
++<div py:def="fence_eps_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_eps_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -585,7 +612,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_ibmblade_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_ibmblade_instance"
++<div py:def="fence_ibmblade_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_ibmblade_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -609,7 +636,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_ifmib_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_ifmib_instance"
++<div py:def="fence_ifmib_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_ifmib_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -633,7 +660,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_intelmodular_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_intelmodular_instance"
++<div py:def="fence_intelmodular_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_intelmodular_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -657,7 +684,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_apc_snmp_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_apc_snmp_instance"
++<div py:def="fence_apc_snmp_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_apc_snmp_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 	<table class="detailstable">
+ 		<tr>
+@@ -681,7 +708,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_drac_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_drac_instance"
++<div py:def="fence_drac_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_drac_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 
+ 	<input type="hidden" name="fence_type" value="fence_scsi" />
+@@ -690,7 +717,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_drac5_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_drac5_instance"
++<div py:def="fence_drac5_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_drac5_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 
+ 	<input type="hidden" name="fence_type" value="fence_scsi" />
+@@ -699,7 +726,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_ilo_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_ilo_instance"
++<div py:def="fence_ilo_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_ilo_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 
+ 	<input type="hidden" name="fence_type" value="fence_scsi" />
+@@ -708,7 +735,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_ilo_mp_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_ilo_mp_instance"
++<div py:def="fence_ilo_mp_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_ilo_mp_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 
+ 	<input type="hidden" name="fence_type" value="fence_scsi" />
+@@ -717,7 +744,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_rsa_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_rsa_instance"
++<div py:def="fence_rsa_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_rsa_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 
+ 	<input type="hidden" name="fence_type" value="fence_scsi" />
+@@ -726,7 +753,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_ipmilan_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_ipmilan_instance"
++<div py:def="fence_ipmilan_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_ipmilan_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 
+ 	<input type="hidden" name="fence_type" value="fence_scsi" />
+@@ -735,7 +762,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_alom_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_alom_instance"
++<div py:def="fence_alom_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_alom_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 
+ 	<input type="hidden" name="fence_type" value="fence_scsi" />
+@@ -744,7 +771,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_cpint_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_cpint_instance"
++<div py:def="fence_cpint_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_cpint_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 
+ 	<input type="hidden" name="fence_type" value="fence_scsi" />
+@@ -753,7 +780,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_rps10_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_rps10_instance"
++<div py:def="fence_rps10_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_rps10_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 
+ 	<input type="hidden" name="fence_type" value="fence_scsi" />
+@@ -762,7 +789,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_rsb_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_rsb_instance"
++<div py:def="fence_rsb_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_rsb_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 
+ 	<input type="hidden" name="fence_type" value="fence_scsi" />
+@@ -771,7 +798,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_xcat_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_xcat_instance"
++<div py:def="fence_xcat_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_xcat_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 
+ 	<input type="hidden" name="fence_type" value="fence_scsi" />
+@@ -780,7 +807,7 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_zvm_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_zvm_instance"
++<div py:def="fence_zvm_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_zvm_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 
+ 	<input type="hidden" name="fence_type" value="fence_scsi" />
+@@ -789,16 +816,32 @@
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_scsi_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_scsi_instance"
++<div py:def="fence_scsi_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_scsi_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+-
++	<table class="detailstable">
++		<tr>
++			<td>Unfencing</td>
++			<td>
++				<input type="checkbox" class="checkbox" name="unfencing"
++					py:attrs="(not cur_fence_inst or kw.get('unfencing', True)) and {'checked': 'checked'}"/>
++				<label class="choice">Enable</label>
++				<input type="hidden" name="unfence_action" value="on" />
++			</td>
++		</tr>
++		<tr><td colspan="2">
++			<div>
++				<input type="button" name="remove_fence" value="Remove this instance"
++					py:attrs="fi_id is not None and {'onclick': '$(\'#%s\').remove()' % fi_id} or {}"/>
++			</div>
++		</td></tr>
++	</table>
+ 	<input type="hidden" name="fence_type" value="fence_scsi" />
+ 	<input type="hidden" name="fence_instance" value="1" />
+ 	<input type="hidden" name="parent_fencedev"
+ 		py:attrs="cur_fence_dev_id and {'value': cur_fence_dev_id} or {}" />
+ </div>
+ 
+-<div py:def="fence_unknown_instance(cur_fence_inst, cur_fence_dev_id, fi_id)" id="fence_unknown_instance"
++<div py:def="fence_unknown_instance(cur_fence_inst, cur_fence_dev_id, fi_id, **kw)" id="fence_unknown_instance"
+ 	py:attrs="fi_id is not None and {'id': fi_id, 'class':'fenceinst'}">
+ 
+ 	<input type="hidden" name="fence_type" value="fence_unknown" />
+diff -urN a/luci/templates/node.html b/luci/templates/node.html
+--- a/luci/templates/node.html	2010-10-11 12:05:47.000000000 -0400
++++ b/luci/templates/node.html	2010-10-11 12:05:22.000000000 -0400
+@@ -296,7 +296,7 @@
+ 		    <th>Type/Values</th>
+ 		    <th></th>
+ 		  </tr>
+-		  <py:for each="instancenum,(fin,fd) in enumerate(instances)">
++		  <py:for each="instancenum,(fin,fd,unfencing) in enumerate(instances)">
+ 			<?python
+ 				agent_type = fd.getAgentType()
+ 				agent_name = fd.getPrettyName()
+@@ -327,7 +327,7 @@
+ 							inst_fn = eval('fence_unknown_instance')
+ 						inst_fn(fin, instance_id, None)
+ 					?>
+-					${inst_fn(fin, cur_dev_id, '%s_%s' % (cur_dev_id, cur_dev_id))}
++					${inst_fn(fin, cur_dev_id, '%s_%s' % (cur_dev_id, cur_dev_id), unfencing=unfencing)}
+ 			    </div>
+ 			    <div class="row">
+ 			      <input type="Submit" value="Submit" class="button formsubmit blue" />
+@@ -365,6 +365,10 @@
+ 		    </td>
+ 		    </py:if>
+ 		  </tr>
++		  <tr py:if="unfencing == True">
++		    <td></td>
++		    <td>unfencing enabled</td>
++		  </tr>
+ 		  </py:for>
+ 		  <tr>
+ 		    <td colspan="3">
+diff -urN a/luci/widget_validators/validate_fence.py b/luci/widget_validators/validate_fence.py
+--- a/luci/widget_validators/validate_fence.py	2010-10-11 12:05:47.000000000 -0400
++++ b/luci/widget_validators/validate_fence.py	2010-10-11 12:05:22.000000000 -0400
+@@ -918,6 +918,9 @@
+ 	fenceinst.addAttribute('name', parent_name)
+ 	fenceinst.setAgentType(fence_agent)
+ 
++	unfence = None
++
++	# XXX: Remove following 4 lines?
+ 	if kw.has_key('option'):
+ 		option = kw.get('option').strip()
+ 		if option:
+@@ -926,12 +929,16 @@
+ 	try:
+ 		ret = FI_VALIDATE[fence_agent](fenceinst, parent_name, **kw)
+ 		if len(ret) > 0:
+-			return (False, ret)
++			return (False, ret, None)
+ 	except Exception, e:
+ 		log.exception('Error validating fence %s instance of %s' % (fence_agent, parent_name))
+-		return (False, [ FI_NEW_FAIL % fence_agent ])
++		return (False, [ FI_NEW_FAIL % fence_agent ], )
+ 
+-	return (True, fenceinst)
++	if kw.has_key('unfencing'):
++		# If unfencing required, create and return it's object.
++		unfence = fenceinst.clone()
++		unfence.addAttribute('action', kw['unfence_action'])
++	return (True, fenceinst, unfence)
+ 
+ def getDeviceForInstance(fds, name):
+ 	for fd in fds:
+@@ -1039,9 +1046,11 @@
+ 			cur_shared.append(shared_struct)
+ 	return (cur_level, cur_shared, major_num, minor_num)
+ 
+-# Return a list of lists containing the level/method and fence instances for
+-# that level
+ def getFenceInfo(model, nodename):
++    """Return a list of lists containing the level/method and fence instances for that level.
++
++    """
++
+     fence_map = []
+ 
+     try:
+@@ -1060,8 +1069,21 @@
+         fence_map_level = [0,0]
+         fence_map_level[0] = level
+         fence_map_level[1] = []
+-        instances = level.getChildren()
+-        for instance in instances:
+-            fence_map_level[1].append([instance,getDeviceForInstance(fds,instance.getName().strip())])
++
++        for instance in level.getChildren():
++            # Lookup, whether the unfencing was set and add a flag appropriately.
++            unfencing_flag = False
++            for child in node.getChildren():
++                if child.getTagName() == 'unfence':
++                    unfence = child
++                    for child_device in unfence.getChildren():
++                        # Try to find existing unfence device that mirrored fence device instance
++                        # to be removed and remove it, too.
++                        if len(set(instance.getAttributes().items()).difference(child_device.getAttributes().items())) == 0:
++                            unfencing_flag = True
++                            break
++                    break
++
++            fence_map_level[1].append([instance,getDeviceForInstance(fds,instance.getName().strip()),unfencing_flag])
+         fence_map.append(fence_map_level)
+     return fence_map

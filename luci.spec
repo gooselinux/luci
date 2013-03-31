@@ -4,7 +4,7 @@
 
 Name: luci
 Version: 0.22.2
-Release: 14%{?dist}
+Release: 14%{?dist}.1
 Summary: Web-based high availability administration application
 Group: Applications/System
 License: GPLv2
@@ -88,6 +88,7 @@ Patch64: bz615926.patch
 Patch65: bz619220-3.patch
 Patch66: bz614130.patch
 Patch67: bz618578.patch
+Patch68: bz642140.patch
 
 %description
 Luci is a web-based high availability administration application built on the
@@ -164,6 +165,7 @@ cp %{_sourcedir}/logo.png %{_builddir}/luci-0.22.2/luci/public/images
 %patch65 -p1 -b .bz619220
 %patch66 -p1 -b .bz614130
 %patch67 -p1 -b .bz618578
+%patch68 -p1 -b .bz642140
 
 %build
 python setup.py build
@@ -226,6 +228,9 @@ fi
 exit 0
 
 %changelog
+* Mon Oct 11 2010 Ryan McCabe <rmccabe@redhat.com> - 0.22.2-14.1
+- Fix bz642140 (add support for unfencing conf. generation for SAN fencing agents and fence_scsi)
+
 * Thu Sep 09 2010 Lon Hohberger <lhh@redhat.com> - 0.22.2-14
 - Randomize secret key in who.ini on each installation.
   Specfile patch from Jan Pokorny.
